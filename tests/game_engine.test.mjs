@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import engine from '../game/engine.js';
-const {AVAILABLE_TOOLS, CHARACTERS, MISSIONS, acceptDecisionChoice, chooseOfflineSpecialist, createFreshGame, resolveMission}=engine;
+const {AVAILABLE_TOOLS, CHARACTERS, NPC_STAFF, MISSIONS, acceptDecisionChoice, chooseOfflineSpecialist, createFreshGame, maybeHrIntervention, resolveMission}=engine;
 
 test('preserves the three missions and four henchmen',()=>{
   assert.deepEqual(MISSIONS.map(m=>m.name),['Steal the Moon','Outlaw Mondays','Control All Coffee']);
@@ -64,4 +64,39 @@ test('invalid or malformed remote choices fall back without a false mismatch',()
 
 test('unavailable fallback skill is rejected explicitly',()=>{
   assert.throws(()=>chooseOfflineSpecialist(MISSIONS[0].plans[0],['force']),/unavailable/);
+});
+
+test('Dolores is NPC staff and not a selectable specialist',()=>{
+  assert.deepEqual(NPC_STAFF[0],{id:'dolores',name:'Dolores',icon:'📋',job:'Director of Human Resources',voice:'deadpan-hr',bio:'Can stop world domination with a mandatory meeting.'});
+  assert.equal(CHARACTERS.some(character=>character.id==='dolores'),false);
+  assert.equal(AVAILABLE_TOOLS.length,4);
+});
+
+test('HR intervention fires at exactly 85 heat',()=>{
+  assert.equal(maybeHrIntervention({...createFreshGame(),heat:85},MISSIONS[0]).event,'hr_intervention');
+});
+
+test('HR intervention does not fire at 84 heat',()=>{
+  assert.equal(maybeHrIntervention({...createFreshGame(),heat:84},MISSIONS[0]),null);
+});
+
+test('HR intervention fires at 100 heat',()=>{
+  assert.equal(maybeHrIntervention({...createFreshGame(),heat:100},MISSIONS[0]).event,'hr_intervention');
+});
+
+test('HR intervention changes only day, heat, and one Dolores log entry',()=>{
+  const before={...createFreshGame(),heat:85,infamy:17,wins:2,losses:3,completed:['moon']};
+  const {state}=maybeHrIntervention(before,MISSIONS[1]);
+  assert.equal(state.money,before.money,'budget must be unchanged');
+  assert.equal(state.day,before.day+1,'day must advance exactly once');
+  assert.equal(state.heat,before.heat-10,'heat must fall by exactly 10');
+  assert.deepEqual(state.loyalty,before.loyalty,'loyalty must be unchanged');
+  assert.equal(state.log.length,before.log.length+1,'exactly one log entry must be added');
+  assert.match(state.log[0],/Dolores/);
+  assert.equal(state.log.filter(entry=>/Dolores/.test(entry)).length,1);
+  assert.equal(state.wins,before.wins,'mission must not be won');
+  assert.equal(state.losses,before.losses,'mission must not be lost');
+  assert.equal(state.infamy,before.infamy,'infamy must not change');
+  assert.deepEqual(state.completed,before.completed,'completed missions must not grow');
+  assert.deepEqual(before.log,['Day 1: Evil Genius Incorporated established. No refunds.'],'input must not be mutated');
 });
