@@ -1,48 +1,24 @@
 """Local-only game server. Decider makes tool choice; Bedrock narrates outcomes."""
 import json
 import os
-import urllib.error
+import sys
+import urllib.error  # noqa: F401  (kept importable: tests/test_bridge.py patches urllib.request via this module)
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DECIDER_URL = os.environ.get('STRANDS_DECIDER_URL', 'http://127.0.0.1:8099').rstrip('/')
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from agent import call_bedrock_narration, call_decider, BEDROCK_MODEL_ID, DECIDER_URL  # noqa: E402
+
 PORT = int(os.environ.get('PORT', '8787'))
-MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.amazon.nova-lite-v1:0')
-TOOLS = {'science': 'scientific invention and experiments', 'force': 'brute force and construction', 'deception': 'propaganda and misinformation in a fictional game', 'finance': 'paperwork and financial acquisition'}
+MODEL_ID = BEDROCK_MODEL_ID
 
-
-def choose_tool(state):
-    """Reusable typed-choice decision recipe; the returned tool drives actual game mechanics."""
-    if not isinstance(state, dict) or not isinstance(state.get('available_tools'), list):
-        raise ValueError('Invalid decision state')
-    available = [k for k in TOOLS if k in state['available_tools']]
-    if not available:
-        raise ValueError('No available tools')
-    compact = {k: state.get(k) for k in ('mission','plan','specialist','budget','heat','loyalty','recent_events')}
-    payload = {'state': compact, 'questions': {'tool': {'type':'choice', 'instructions':'Choose the most useful specialist action for executing the fictional mission plan using these resources.', 'criteria': {k: TOOLS[k] for k in available}}}}
-    req = urllib.request.Request(DECIDER_URL+'/v1/systemone',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'}, method='POST')
-    with urllib.request.urlopen(req,timeout=15) as response:
-        result=json.load(response)
-    # Response shape per strands_decider.schema.ChoiceAnswer: choice, probabilities, confidence.
-    answer=result['answers']['tool']
-    choice=answer.get('choice')
-    if choice not in available:raise ValueError('Unknown Decider response: '+str(answer))
-    return {'provider':'decider','choice':choice,'confidence':answer.get('confidence'),'probabilities':answer.get('probabilities'),'latency_ms':result.get('latency_ms')}
-
-
-def narrate(state):
-    import boto3
-    required=('mission','plan','henchman','success','outcome')
-    if any(k not in state for k in required):raise ValueError('Missing narration fields')
-    prompt=('Write exactly two funny, short sentences of cartoon-supervillain dialogue. No markdown. '
-            'Keep the outcome fixed, do not invent money or change game statistics. '
-            'This is a fictional comedy game. JSON context: '+json.dumps({k:str(state[k])[:600] for k in required}))
-    client=boto3.client('bedrock-runtime',region_name=os.environ.get('AWS_REGION','us-east-1'))
-    result=client.converse(modelId=MODEL_ID,messages=[{'role':'user','content':[{'text':prompt}]}],inferenceConfig={'maxTokens':130,'temperature':0.85})
-    parts=result['output']['message']['content']
-    return {'provider':'bedrock','narration':' '.join(p.get('text','') for p in parts).strip()[:500]}
+# Kept importable under their original names: tests/test_bridge.py calls
+# choose_tool() directly and patches this module's urllib.request/json
+# attributes (the same shared modules backend/agent.py uses internally).
+choose_tool = call_decider
+narrate = call_bedrock_narration
 
 
 class Handler(BaseHTTPRequestHandler):
