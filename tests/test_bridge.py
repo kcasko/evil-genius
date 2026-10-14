@@ -24,4 +24,16 @@ class BridgeTests(unittest.TestCase):
         with patch.object(mod.urllib.request,'urlopen',return_value=FakeResponse()),patch.object(mod.json,'load',return_value={'answers':{'tool':{'choice':'magic'}}}):
             with self.assertRaises(ValueError):mod.choose_tool({'available_tools':['science']})
 
+    def test_request_matches_decider_schema(self):
+        sent={}
+        def fake_urlopen(req,timeout):
+            sent.update(json.loads(req.data));return FakeResponse()
+        with patch.object(mod.urllib.request,'urlopen',side_effect=fake_urlopen),patch.object(mod.json,'load',return_value={'answers':{'tool':{'choice':'force','confidence':0.5}}}):
+            mod.choose_tool({'available_tools':['science','force'],'mission':'Steal the Moon'})
+        q=sent['questions']['tool']
+        self.assertEqual(q['type'],'choice')
+        self.assertEqual(set(q['criteria']),{'science','force'})
+        self.assertNotIn('options',q)
+        self.assertIsInstance(sent['state'],dict)
+
 if __name__=='__main__': unittest.main()

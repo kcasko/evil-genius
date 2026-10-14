@@ -21,19 +21,15 @@ def choose_tool(state):
     if not available:
         raise ValueError('No available tools')
     compact = {k: state.get(k) for k in ('mission','plan','specialist','budget','heat','loyalty','recent_events')}
-    payload = {'state': json.dumps(compact), 'questions': {'tool': {'type':'choice', 'instructions':'Choose the most useful specialist action for executing the fictional mission plan using these resources.', 'options': available}}}
+    payload = {'state': compact, 'questions': {'tool': {'type':'choice', 'instructions':'Choose the most useful specialist action for executing the fictional mission plan using these resources.', 'criteria': {k: TOOLS[k] for k in available}}}}
     req = urllib.request.Request(DECIDER_URL+'/v1/systemone',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'}, method='POST')
     with urllib.request.urlopen(req,timeout=15) as response:
         result=json.load(response)
+    # Response shape per strands_decider.schema.ChoiceAnswer: choice, probabilities, confidence.
     answer=result['answers']['tool']
-    choice=answer.get('choice') or answer.get('selected') or answer.get('value')
-    if isinstance(choice,dict):choice=choice.get('label') or choice.get('name')
-    if isinstance(choice,int) and 0 <= choice < len(available):choice=available[choice]
-    if not choice:
-        scores=answer.get('probabilities') or answer.get('scores')
-        if isinstance(scores,dict):choice=max(scores,key=scores.get)
+    choice=answer.get('choice')
     if choice not in available:raise ValueError('Unknown Decider response: '+str(answer))
-    return {'provider':'decider','choice':choice,'confidence':answer.get('confidence')}
+    return {'provider':'decider','choice':choice,'confidence':answer.get('confidence'),'probabilities':answer.get('probabilities'),'latency_ms':result.get('latency_ms')}
 
 
 def narrate(state):
