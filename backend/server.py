@@ -9,7 +9,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from agent import call_bedrock_narration, call_decider, BEDROCK_MODEL_ID, DECIDER_URL  # noqa: E402
+from agent import (  # noqa: E402
+    BedrockUnavailableError,
+    BEDROCK_MODEL_ID,
+    DeciderUnavailableError,
+    DECIDER_URL,
+    call_bedrock_narration,
+    call_decider,
+)
 
 PORT = int(os.environ.get('PORT', '8787'))
 MODEL_ID = BEDROCK_MODEL_ID
@@ -50,6 +57,13 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(state,dict):return self.respond(400,{'error':'Expected object'})
             result=choose_tool(state) if self.path=='/api/decide' else narrate(state)
             return self.respond(200,result)
+        except (DeciderUnavailableError,BedrockUnavailableError) as exc:
+            # Service-side failure (unreachable host, malformed response) --
+            # never the player's fault, so 503, not 400. The detailed message
+            # (which may name a host/port or come from a boto3 ClientError
+            # containing a region or IAM ARN) stays server-side only.
+            print(type(exc).__name__,str(exc)[:200])
+            return self.respond(503,{'provider':'unavailable','error':'AI provider unavailable; offline gameplay continues'})
         except (ValueError,KeyError) as exc:return self.respond(400,{'error':str(exc)})
         except Exception as exc:
             # Don't reveal AWS credentials, stack traces, or remote service details to clients.

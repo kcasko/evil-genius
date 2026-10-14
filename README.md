@@ -35,7 +35,34 @@ credentials actually answering a request) has not been run end-to-end by a
 human in this environment. Everything in `backend/agent.py` is covered only
 by mock-based tests (see `backend/tests/`, which never touch the network);
 treat live behavior as unverified until someone runs it with real Decider
-weights and AWS credentials.
+weights and AWS credentials. This hedge comes off once
+`backend/tests/fixtures/live_decider_response.json` and
+`live_bedrock_response.json` exist as real captured responses (see below).
+
+### Verifying live inference
+
+`backend/scripts/verify_live.py` is the diagnostic script for this. It is
+never run automatically (not by the test suite, not in CI) because it makes
+real network calls. Run it yourself once Decider is serving and AWS
+credentials are configured:
+
+```bash
+# Dependency/reachability check only -- no Bedrock or Decider inference
+# call, safe to run anytime (including CI):
+python backend/scripts/verify_live.py --dry-run
+
+# Full live run: hits the real /v1/systemone endpoint and real Bedrock
+# converse() once each, prints every raw response, and writes
+# backend/tests/fixtures/live_decider_response.json and
+# live_bedrock_response.json for you to commit as golden fixtures:
+python backend/scripts/verify_live.py
+```
+
+Use the captured `live_decider_response.json` to resolve the
+`# TODO: verify against installed version` marker in
+`backend/agent.py::validate_decider_response`, then add a golden-response
+unit test under `backend/tests/` built from that fixture so a future schema
+regression breaks CI.
 
 ## Strands Agent: specialist tool selection + narration
 
@@ -52,11 +79,30 @@ respect to game state:
   tool mapped to a float in `[0, 1]`.
 - `narrate_outcome(state)` calls Bedrock's Converse API for two sentences of
   cosmetic supervillain dialogue. Cosmetic only: it cannot and does not
-  change game arithmetic.
+  change game arithmetic. The prompt (`agent.build_narration_prompt`) is
+  hardened per `GAME_VISION.md` §3: exactly two sentences, no markdown/lists,
+  explicit fictional-comedy framing, the correct per-character voice tag
+  (`mal` / `boris` / `chaos` / `kevin` / `dolores`, with a neutral fallback
+  voice for any other id), and a ban on modern-world brands, celebrities,
+  politicians, and references to our inspiration TV shows (The Office, Parks
+  and Recreation, Silicon Valley, Scrubs, Arrested Development, Brooklyn
+  Nine-Nine, Futurama) -- per §3, the game studies the comedic *technique* of
+  those shows, it never references or copies them. `agent.postprocess_narration`
+  then strips a leading markdown fence or role prefix, truncates to 500 chars,
+  and falls back to a fixed, non-Bedrock line if a banned reference slips
+  through anyway.
 
 A `DeciderValidationHandler` (a Strands intervention / `before_tool_call`
 handler) denies a `choose_specialist` call before it runs if its
 `available_tools` argument is missing or empty.
+
+Both tools raise a dedicated error type (`DeciderUnavailableError` /
+`BedrockUnavailableError`) when the upstream service is unreachable or
+returns a response that can't be parsed, as opposed to a plain `ValueError`
+for an actual bad/invalid decision. `backend/server.py` maps the former to a
+sanitized HTTP 503 and the latter to a 400; neither ever forwards a stack
+trace, credential detail, AWS region, or ARN to the HTTP client -- those only
+get printed to the server's own stdout for a human to read locally.
 
 `backend/server.py` imports `agent.call_decider` / `agent.call_bedrock_narration`
 as `choose_tool` / `narrate` (kept importable under their original names for
@@ -82,9 +128,10 @@ qualified submission yet.
 ## Verify
 
 ```bash
-python -m py_compile backend/server.py backend/agent.py
+python -m py_compile backend/server.py backend/agent.py backend/scripts/verify_live.py
 python -m unittest discover -s tests -v
 python -m unittest discover -s backend/tests -v
+python backend/scripts/verify_live.py --dry-run
 ```
 
 ## Contest tags

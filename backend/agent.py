@@ -27,6 +27,7 @@ and boto3.client). See README.md before running this for real.
 """
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -47,6 +48,29 @@ TOOLS = {
 }
 
 
+class DeciderUnavailableError(RuntimeError):
+    """The Decider server is unreachable or its response could not be parsed.
+
+    Distinct from a plain ValueError, which means the Decider answered
+    structurally correctly but chose something invalid (a real validation
+    failure the player's request caused). This class means the service
+    itself is the problem, so server.py maps it to a 503, not a 400, and
+    never forwards the underlying message (which may embed host/port
+    details) to the HTTP client.
+    """
+
+
+class BedrockUnavailableError(RuntimeError):
+    """Bedrock is unreachable or its response could not be parsed.
+
+    Covers boto3/botocore exceptions (which can include IAM principal ARNs
+    or region names in their messages, e.g. AccessDenied errors) and
+    malformed Converse responses. server.py maps this to a 503 and only
+    logs the original message server-side -- it never forwards it to the
+    HTTP client.
+    """
+
+
 def _is_unit_fraction(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and 0.0 <= value <= 1.0
 
@@ -60,6 +84,13 @@ def validate_decider_response(answer, available):
     # not published as of this writing; only a 'noul' answer example was
     # ({"type": "noul", "noul": 0.86}). Field names here (choice/confidence/
     # probabilities) follow that shape by analogy.
+    #
+    # What the human should check: run `python backend/scripts/verify_live.py`
+    # against a real strands-decider server and compare the printed
+    # `answers.tool` object's keys to this function's `choice` / `confidence`
+    # / `probabilities` field names below. If the live field names differ,
+    # update this function to match and commit the captured response to
+    # backend/tests/fixtures/live_decider_response.json as a golden test.
 
     Args:
         answer: the `answers.<question>` object from a /v1/systemone response.
@@ -118,10 +149,16 @@ def call_decider(state):
         headers={'Content-Type': 'application/json'},
         method='POST',
     )
-    with urllib.request.urlopen(req, timeout=15) as response:
-        result = json.load(response)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            result = json.load(response)
+    except (urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise DeciderUnavailableError('Decider server unreachable or returned invalid JSON') from exc
     # Response shape per strands_decider.schema.ChoiceAnswer: choice, probabilities, confidence.
-    answer = result['answers']['tool']
+    try:
+        answer = result['answers']['tool']
+    except (KeyError, TypeError) as exc:
+        raise DeciderUnavailableError("Decider response missing expected 'answers.tool' field") from exc
     choice = validate_decider_response(answer, available)
     return {
         'provider': 'decider',
@@ -151,24 +188,149 @@ def choose_specialist(state: dict) -> dict:
     return call_decider(state)
 
 
+# Per-character voice descriptors, matched to the canon in GAME_VISION.md §2.
+# `NEUTRAL_VOICE_DESCRIPTOR` is the fallback for any henchman id not listed
+# here (e.g. an unrecognized id from a future character) so prompt-building
+# never crashes or emits an empty voice instruction.
+VOICE_DESCRIPTORS = {
+    'mal': (
+        "Dr. Malpractice: dry, elaborate wit built from metaphors about particle "
+        "physics and cocktails; rarely admits a feeling without immediately "
+        "burying it in jargon."
+    ),
+    'boris': (
+        "Boris the Brute: short sentences, first person, earnest; occasionally "
+        "bursts into a surprisingly specific technical detail about demolition."
+    ),
+    'chaos': (
+        "CHAOS-9000: precise, cheerful, passive-aggressive; measures things in "
+        "percentages; calls its own emotions 'subprocess states.'"
+    ),
+    'kevin': (
+        "Kevin from Accounting: over-qualified sentences, anxious hedging; "
+        "often opens with phrases like 'So -- not to be alarmist --'."
+    ),
+    'dolores': (
+        "Dolores from HR: deadpan, HR-speak; uses 'per policy' the way other "
+        "people use punctuation."
+    ),
+}
+NEUTRAL_VOICE_DESCRIPTOR = (
+    "a fictional Evil Genius Incorporated employee with a dry, understated "
+    "workplace sense of humor."
+)
+
+# Per GAME_VISION.md §3: we study the technique of these shows, we do not
+# reference them. Checked case-insensitively against the model's raw output.
+BANNED_SHOW_REFERENCES = (
+    'the office',
+    'parks and recreation',
+    'silicon valley',
+    'scrubs',
+    'arrested development',
+    'brooklyn nine-nine',
+    'futurama',
+)
+
+# Used whenever Bedrock's raw output can't be trusted as-is (forbidden
+# reference detected). Fictional, two sentences, no banned references,
+# and -- like all narration -- purely cosmetic.
+FALLBACK_NARRATION = (
+    "The mission report lands on the desk exactly as confusing as the mission itself. "
+    "Everyone agrees this was someone else's fault."
+)
+
+_LEADING_FENCE_RE = re.compile(r'^```[A-Za-z0-9_-]*\n?')
+_ROLE_PREFIX_RE = re.compile(r'^[A-Za-z][A-Za-z0-9 _-]{0,20}:\s*')
+
+
+def _voice_descriptor(henchman):
+    return VOICE_DESCRIPTORS.get(henchman, NEUTRAL_VOICE_DESCRIPTOR)
+
+
+def build_narration_prompt(state, required):
+    """Build the Bedrock narration prompt, hardened per GAME_VISION.md §3.
+
+    Enforces: exactly two sentences, no markdown/lists, explicit fictional
+    comedy framing, the correct per-character voice tag, a ban on
+    modern-world brands/celebrities/politicians and on our inspiration TV
+    shows, and a reminder that the narration is cosmetic (never changes
+    money/heat/infamy/loyalty).
+    """
+    voice = _voice_descriptor(state.get('henchman'))
+    banned_list = ', '.join(name.title() for name in BANNED_SHOW_REFERENCES)
+    context = json.dumps({k: str(state[k])[:600] for k in required})
+    return (
+        'You are writing dialogue for a work of fiction: a comedic, fictional '
+        'supervillain-management game. Stay in character; do not mention that '
+        'this is an AI response. '
+        'Write EXACTLY two sentences of in-character dialogue -- no more, no '
+        'fewer. Plain prose only: no markdown, no bullet points, no numbered '
+        'lists, no headings, no code fences, no character-name prefix. '
+        f'Voice for this line: {voice} '
+        'Never use real-world brand names, celebrity names, or politician '
+        'names. Never reference or allude to real television shows, '
+        f'including: {banned_list}. Invent original phrasing instead. '
+        'The mission outcome and every game number (money, heat, infamy, '
+        'loyalty) are already fixed by the game engine -- your two sentences '
+        'are cosmetic flavor only and must not claim to change any of them. '
+        'JSON context: ' + context
+    )
+
+
+def _strip_leading_markdown_fence(text):
+    text = _LEADING_FENCE_RE.sub('', text, count=1)
+    text = text.strip()
+    if text.endswith('```'):
+        text = text[:-3].strip()
+    return text
+
+
+def _strip_role_prefix(text):
+    return _ROLE_PREFIX_RE.sub('', text, count=1)
+
+
+def _contains_banned_reference(text):
+    lowered = text.lower()
+    return any(name in lowered for name in BANNED_SHOW_REFERENCES)
+
+
+def postprocess_narration(raw_text):
+    """Clean and validate raw Bedrock output before it reaches the player.
+
+    Strips a leading markdown fence and a leading role-style prefix (e.g.
+    'Assistant:'), falls back to `FALLBACK_NARRATION` if a banned TV-show
+    reference slipped through despite the prompt, and caps length at 500
+    chars server-side regardless of what the model returned.
+    """
+    text = _strip_leading_markdown_fence(raw_text)
+    text = _strip_role_prefix(text).strip()
+    if _contains_banned_reference(text):
+        text = FALLBACK_NARRATION
+    return text[:500]
+
+
 def call_bedrock_narration(state):
     """Call Bedrock's Converse API for two sentences of cosmetic supervillain dialogue."""
     required = ('mission', 'plan', 'henchman', 'success', 'outcome')
     if any(k not in state for k in required):
         raise ValueError('Missing narration fields')
-    prompt = (
-        'Write exactly two funny, short sentences of cartoon-supervillain dialogue. No markdown. '
-        'Keep the outcome fixed, do not invent money or change game statistics. '
-        'This is a fictional comedy game. JSON context: ' + json.dumps({k: str(state[k])[:600] for k in required})
-    )
-    client = boto3.client('bedrock-runtime', region_name=AWS_REGION)
-    result = client.converse(
-        modelId=BEDROCK_MODEL_ID,
-        messages=[{'role': 'user', 'content': [{'text': prompt}]}],
-        inferenceConfig={'maxTokens': 130, 'temperature': 0.85},
-    )
-    parts = result['output']['message']['content']
-    return {'provider': 'bedrock', 'narration': ' '.join(p.get('text', '') for p in parts).strip()[:500]}
+    prompt = build_narration_prompt(state, required)
+    try:
+        client = boto3.client('bedrock-runtime', region_name=AWS_REGION)
+        result = client.converse(
+            modelId=BEDROCK_MODEL_ID,
+            messages=[{'role': 'user', 'content': [{'text': prompt}]}],
+            inferenceConfig={'maxTokens': 130, 'temperature': 0.85},
+        )
+    except Exception as exc:
+        raise BedrockUnavailableError('Bedrock request failed') from exc
+    try:
+        parts = result['output']['message']['content']
+        raw_text = ' '.join(p.get('text', '') for p in parts).strip()
+    except (KeyError, TypeError) as exc:
+        raise BedrockUnavailableError("Bedrock response missing expected 'output.message.content' field") from exc
+    return {'provider': 'bedrock', 'narration': postprocess_narration(raw_text)}
 
 
 @tool
