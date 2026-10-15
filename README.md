@@ -6,6 +6,8 @@ Standalone browser game with three missions, four henchmen, and persistent offli
 
 Open `index.html` in Chrome or Edge. Offline mode never calls AI and runs deterministic simulated outcomes.
 
+Gameplay rules live in `game/engine.js`. The browser uses the same pure mission resolver and deterministic specialist fallback exercised by the Node test suite.
+
 ## Run with live decision model + Bedrock
 
 Requires Python 3.10+, AWS credentials configured with `bedrock:InvokeModel` permission, access to the configured Bedrock model, and the experimental Decider model weights (downloaded separately). Running Decider may use substantial CPU/GPU memory.
@@ -37,6 +39,7 @@ Open `http://127.0.0.1:8787`. The server binds to loopback only. **Do not expose
 ```bash
 python -m py_compile backend/server.py
 python -m unittest discover -s tests -v
+node --test tests/*.test.mjs
 ```
 
 ## Contest tags
