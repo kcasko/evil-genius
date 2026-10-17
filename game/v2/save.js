@@ -44,6 +44,8 @@
           || !ids(m.assigned,C.HENCHMEN_BY_ID) || !ids(m.loadout,C.EQUIPMENT_BY_ID)
           || !object(m.carriedBonuses) || !object(m.attemptCounters) || !number(m.relaunchCount)
           || !Array.isArray(m.stageResults) || !m.stageResults.every(r => object(r) && typeof r.pass === 'boolean' && typeof r.stage === 'string')) fail();
+      if (m.retryBonus != null && (!Number.isInteger(m.retryBonus) || m.retryBonus < 0 || m.retryBonus > 15)) fail();
+      if (m.carriedBonuses.milestoneSecured != null && typeof m.carriedBonuses.milestoneSecured !== 'boolean') fail();
       if (!['idle','done'].includes(m.stage) && !m.assigned.length) fail();
     }
     for (const key of ['chaos_debuff_days','lab_offline_days','chaos_offline_days','next_dc','unpaid_upkeep_streak','moon_intel_days']) if (!number(s.debuffs[key])) fail();
@@ -64,6 +66,10 @@
       if (!m.stageResults) m.stageResults = [];
     }
     if (s.campaign && Array.isArray(s.missions.prototype?.stageResults) && s.missions.prototype.stageResults.some(r => r?.stage === 'breach' && r.pass)) s.missions.prototype.carriedBonuses.prototypeTested = true;
+    if (s.campaign) for (const id of ['funding','satellite','prototype']) {
+      const m=s.missions[id];
+      if (m && m.stageResults.some(r => r?.stage === 'breach' && r.pass)) m.carriedBonuses.milestoneSecured=true;
+    }
     s.debuffs = s.debuffs || {};
     if (s.debuffs.unpaid_upkeep_streak == null) s.debuffs.unpaid_upkeep_streak = 0;
     if (s.debuffs.moon_intel_days == null) s.debuffs.moon_intel_days = 0;

@@ -98,7 +98,7 @@
     if (!def?.unlocked || (def.campaignOnly && !state.campaign)) return no('Mission not available');
     if (state.outcome !== 'running') return no('This run has ended. Start a new game.');
     if (!state.campaign) return {ok:true, reason:''};
-    const done = id => state.missions[id]?.status === 'success' || (id === 'prototype' && state.missions[id]?.carriedBonuses?.prototypeTested === true);
+    const done = id => state.missions[id]?.status === 'success' || state.missions[id]?.carriedBonuses?.milestoneSecured === true || (id === 'prototype' && state.missions[id]?.carriedBonuses?.prototypeTested === true);
     if (Object.values(state.missions).some(m => !['idle','done'].includes(m.stage))) return no('Finish or forfeit your active operation first.');
     if (state.campaign.lastOperationDay === state.day) return no('The crew has used today’s operation slot. Prepare the lair and launch tomorrow.');
     if (['satellite','prototype','moon'].includes(missionId) && !done('funding')) return no('Complete Raid Rival Payroll first.');
@@ -356,7 +356,7 @@
     m.assigned = hens;
     m.loadout = eq;
     m.stageResults = [];
-    m.carriedBonuses = m.carriedBonuses?.prototypeTested ? {prototypeTested:true} : {};
+    m.carriedBonuses = {...(m.carriedBonuses?.prototypeTested ? {prototypeTested:true} : {}), ...(m.carriedBonuses?.milestoneSecured ? {milestoneSecured:true} : {})};
     m.attemptCounters = {};
     // B2 fix: bump relaunchCount so retries roll differently under the same seed.
     m.relaunchCount = (m.relaunchCount || 0) + 1;
@@ -403,7 +403,7 @@
       dc += def.difficulty || 0;
       if (def.difficulty) reasons.push(`Operation difficulty: ${def.difficulty} DC`);
       if (def.favoredSkills?.includes(inputs.skill)) { modifier += 10; reasons.push(`Useful specialty (${inputs.skill}): +10`); }
-      if (missionId === 'moon' && state.missions.satellite?.status === 'success') { modifier += 5; reasons.push('Satellite uplink: +5'); }
+      if (missionId === 'moon' && (state.missions.satellite?.status === 'success' || state.missions.satellite?.carriedBonuses?.milestoneSecured)) { modifier += 5; reasons.push('Satellite uplink: +5'); }
       if (missionId === 'moon' && stage === 'breach' && (state.missions.prototype?.status === 'success' || state.missions.prototype?.carriedBonuses?.prototypeTested)) { modifier += 5; reasons.push('Tested shrink ray: +5'); }
     }
 
@@ -439,6 +439,8 @@
         if (fumble > 0) reasons.push(`${def.name} stressed: -${fumble}`);
       }
     }
+
+    if (state.campaign && m.retryBonus > 0) { modifier += m.retryBonus; reasons.push(`Lessons learned: +${m.retryBonus}`); }
 
     // Equipment synergy
     for (const eid of workingEquipment(state, inputs.equipment || m.loadout || [])) {
@@ -717,6 +719,10 @@
         const mdef = C.MISSIONS_BY_ID[missionId];
         const bonus = Math.round(mdef.reward * 0.1);
         m.carriedBonuses.rewardBonus = bonus;
+        if (s.campaign && ['funding','satellite','prototype'].includes(missionId)) {
+          m.carriedBonuses.milestoneSecured = true;
+          result.events.push('Campaign milestone secured. A failed escape will not erase this progress.');
+        }
         result.story = 'Breach clean. Payout bonus unlocked.';
         result.events.push(`Breach: pass. +${bonus} bonus reward on success.`);
         if (s.campaign && missionId === 'prototype') {
@@ -825,6 +831,10 @@
     }
 
     // First Aid Kit: one-time mission-end recovery for the entire assigned crew.
+    if (s.campaign && m.stage === 'done' && ['failed','failed_escape'].includes(m.status)) {
+      m.retryBonus = Math.min(15, (m.retryBonus || 0) + 5);
+      result.events.push(`Lessons learned: future attempts get +${m.retryBonus} (maximum +15).`);
+    }
     if (m.stage === 'done') applyMissionEndRecovery(s, m, result.events);
 
     // Consume one-shot DC bump

@@ -33,3 +33,6 @@ A fresh revised-balance browser run subsequently reached victory on day six with
 ## Contest follow-up
 
 The full Rules tab specifies YouTube, Vimeo, Facebook Video, or Youku for the public demo. The existing CloudFront-hosted video alone does not meet that hosting requirement. The rules give an October 23, 2026, 11:59 PM Pacific deadline and evaluation after close, but do not explicitly state a policy for revisions. Existing articles/projects expose edit controls. Leave the current entry available while reviewing this candidate; align the eventual approved source, game, article, and supported-platform video before the deadline.
+
+## Pacing revision
+Contract Breach success now secures its campaign milestone even if Escape fails. Completed failures add +5 retry help, capped at +15; forfeiting adds none. Headquarters shows recovery advice with existing actions. All 99 automated tests passed. First-available simulated choices average 11.38 game days, longest 26 versus the earlier 70. Deliberately poor choices can still take 47 days. No new full browser campaign was played after this pacing revision; browser inspection confirmed the recovery panel and milestone labels.

@@ -103,7 +103,13 @@
       campaignPanel.hidden = !state.campaign;
       if (state.campaign) {
         const goals = [['funding','Raid Rival Payroll'],['satellite','Hijack the Uplink'],['prototype','Field-test the Shrink Ray']];
-        campaignPanel.innerHTML = `<h3>Your road to the Moon</h3><p>Secure the payroll and satellite, successfully test the shrink ray, build the Server Room and Laboratory, and research gear. One launch per day, including retries. Use the remaining time to manage the crew.</p><ol>${goals.map(([id,name]) => `<li>${(state.missions[id]?.status === 'success' || (id === 'prototype' && state.missions[id]?.carriedBonuses?.prototypeTested)) ? '✓' : '○'} ${esc(name)}</li>`).join('')}<li>${(state.campaign.researchCompleted || state.equipmentUnlocked.length) ? '✓' : '○'} Research equipment</li><li>Finale: Steal the Moon ($150 + 2 CP)</li></ol><button class="secondary small" data-laylow ${state.cp < 1 || state.money < 25 || state.heat <= 8 ? 'disabled' : ''}>Lay low: -15 Heat ($25, 1 CP)</button>`;
+        const recovery = [];
+        if (state.heat >= 40) recovery.push(`<p>Heat is ${state.heat}%. At 100%, the run ends. <button class="secondary small" data-recover="heat" ${state.cp<1 || state.money<25 || state.outcome!=='running'?'disabled':''}>Lay low (-15 Heat, $25, 1 CP)</button></p>`);
+        for (const [id,h] of Object.entries(state.henchmen)) if ((h.stress || 0) >= 40 || (h.rage || 0) >= 70) recovery.push(`<p>${esc(C.HENCHMEN_BY_ID[id].name)}: ${id==='boris' ? 'high rage raises risk' : 'stress reduces stage odds'}. <button class="secondary small" data-recover="${id}" ${state.cp<1 || state.outcome!=='running'?'disabled':''}>Day off (-30, 1 CP)</button></p>`);
+        if (state.equipmentBroken.length) recovery.push(`<p>Broken gear gives no bonuses. Repair it in the Laboratory below, or choose working gear.</p>`);
+        const recoveryHtml = recovery.length ? `<section aria-label="Recovery advice"><h3>Before your next operation</h3>${recovery.join('')}</section>` : '';
+        campaignPanel.innerHTML = `${recoveryHtml}<h3>Your road to the Moon</h3><p>Secure the payroll and satellite, successfully test the shrink ray, build the Server Room and Laboratory, and research gear. One launch per day, including retries. Use the remaining time to manage the crew.</p><ol>${goals.map(([id,name]) => `<li>${(state.missions[id]?.status === 'success' || state.missions[id]?.carriedBonuses?.milestoneSecured || (id === 'prototype' && state.missions[id]?.carriedBonuses?.prototypeTested)) ? '✓' : '○'} ${esc(name)}</li>`).join('')}<li>${(state.campaign.researchCompleted || state.equipmentUnlocked.length) ? '✓' : '○'} Research equipment</li><li>Finale: Steal the Moon ($150 + 2 CP)</li></ol><button class="secondary small" data-laylow ${state.cp < 1 || state.money < 25 || state.heat <= 8 ? 'disabled' : ''}>Lay low: -15 Heat ($25, 1 CP)</button>`;
+        campaignPanel.querySelectorAll('[data-recover]').forEach(b => b.onclick = () => bus.emit('action', b.dataset.recover==='heat' ? {kind:'laylow'} : {kind:'dayoff',henchman:b.dataset.recover}));
         campaignPanel.querySelector('[data-laylow]').onclick = () => bus.emit('action', {kind:'laylow'});
       }
     }
@@ -123,6 +129,8 @@
       if (state.campaign && !inProgress && ms.status !== 'success' && !availability.ok) btn = `<p class="mission-lock">${esc(availability.reason)}</p><button class="secondary" disabled>Not ready yet</button>`;
       if (state.campaign && m.id === 'prep' && !inProgress && !availability.ok) btn = `<p class="mission-lock">${esc(availability.reason)}</p><button class="secondary" disabled>Not ready yet</button>`;
       if (state.campaign && m.id === 'prototype' && ms.carriedBonuses?.prototypeTested) btn = '<div class="mini verdict good">SHRINK RAY TESTED · MOON MILESTONE SECURED</div>' + (inProgress ? btn : '<p>Preparation secured. Escape determines how much loot you bring home.</p>');
+      if (state.campaign && ['funding','satellite'].includes(m.id) && ms.carriedBonuses?.milestoneSecured) btn = '<div class="mini verdict good">CAMPAIGN MILESTONE SECURED</div>' + (inProgress ? btn : '<p>Progress kept. Move on to the next operation.</p>');
+      if (state.campaign && ms.retryBonus) btn += `<p>Lessons learned: +${ms.retryBonus} on retries (maximum +15).</p>`;
       // Side-op intel pill on the Moon card.
       const intelPill = (m.id === 'moon' && state.debuffs?.moon_intel_days > 0)
         ? `<div class="pill good">Side-op intel: ${state.debuffs.moon_intel_source} +15 (${state.debuffs.moon_intel_days}d)</div>` : '';

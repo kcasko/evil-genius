@@ -19,7 +19,7 @@ function play(seed){
   if(!s.equipmentUnlocked.includes('aid'))action({kind:'research',equipment:'aid'});
   const stressed=C.HENCH_IDS.slice().sort((a,b)=>(s.henchmen[b].stress+(s.henchmen[b].rage||0))-(s.henchmen[a].stress+(s.henchmen[a].rage||0)));
   if((s.henchmen[stressed[0]].stress||s.henchmen[stressed[0]].rage)>40)action({kind:'dayoff',henchman:stressed[0]});
-  const id=['funding','satellite','prototype','moon'].find(id=>s.missions[id].status!=='success' && !(id==='prototype' && s.missions[id].carriedBonuses.prototypeTested));
+  const id=['funding','satellite','prototype','moon'].find(id=>s.missions[id].status!=='success' && !s.missions[id].carriedBonuses.milestoneSecured && !(id==='prototype' && s.missions[id].carriedBonuses.prototypeTested));
   if(id && E.missionAvailability(s,id).ok){
    const def=C.MISSIONS_BY_ID[id];
    const crew=C.HENCH_IDS.slice().sort((a,b)=>{
