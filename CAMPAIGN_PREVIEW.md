@@ -1,3 +1,5 @@
+> Historical development notes. The campaign is now deployed and published. See README.md and PUBLICATION_CHECKLIST.md for current links and status.
+
 # Campaign preview
 
 This branch is a local gameplay candidate. It has not replaced the public game or contest source. No new AWS infrastructure or paid inference was used to test it.
