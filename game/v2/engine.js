@@ -363,8 +363,32 @@
     return { state: s };
   }
 
+  // Campaign exits use one specialist, not the combined strength of the whole crew.
+  // Loud keeps Boris/Hammer's established force identity; fast is a technical getaway.
+  function campaignEscapeSupport(state, missionId, plan) {
+    const m = state.missions[missionId];
+    const skill = {fast:'science', clever:'deception', loud:'force'}[plan];
+    const ranked = (m.assigned || []).map(id => {
+      const h = state.henchmen[id], def = C.HENCHMEN_BY_ID[id];
+      let comp = h.competence;
+      if (id === 'mal' && state.buildings.includes('lab') && !(state.debuffs?.lab_offline_days > 0)) comp = Math.round(comp * 1.25);
+      const mult = def.skill === skill ? def.traitBonus || 1 : def.traitPenalty?.[skill] || def.traitPenalty?.off || 1;
+      let score = Math.round(comp * mult * 1.3) - (def.stressImmune ? 0 : Math.floor(h.stress / 4));
+      if (id === 'chaos') score -= (state.debuffs?.chaos_offline_days > 0 ? 10 : 0) + (state.debuffs?.chaos_debuff_days > 0 ? 4 : 0);
+      return {id, score};
+    }).sort((a,b) => b.score-a.score);
+    return {skill, henchmen:ranked.length ? [ranked[0].id] : [],
+      equipment:workingEquipment(state,m.loadout).filter(id => !C.EQUIPMENT_BY_ID[id].synergy || C.EQUIPMENT_BY_ID[id].synergy === skill)};
+  }
+
+  function failedMissionPayout(state, missionId) {
+    const def = C.MISSIONS_BY_ID[missionId];
+    return state.campaign ? (missionId === 'moon' ? 150 : def.launchCost || 0) : Math.round(def.reward * 0.5);
+  }
+
   // --- utility: compute stage probability (0..1) given state + inputs ---
   function stageProbability(state, missionId, stage, inputs) {
+    if (state.campaign && stage === 'escape') inputs = {...inputs, ...campaignEscapeSupport(state,missionId,inputs.plan)};
     const dcCfg = C.STAGE_DCS[stage];
     const m = state.missions[missionId];
     let dc = (stage === 'escape') ? dcCfg[inputs.plan] : dcCfg.base;
@@ -651,10 +675,11 @@
           result.events.push(`Payoff: pass. +$${bonus}. Moon ${niceName} for ${SIDE_OP_INTEL_DAYS}d.`);
         } else {
           s.heat = Math.min(100, s.heat + 12);
+          if (s.campaign) s.money += failedMissionPayout(s, missionId);
           m.status = 'failed';
           m.stage = 'done';
           result.story = 'Prep op blown. Heat spiked.';
-          result.events.push('Payoff: fail. +12 heat. No intel bonus.');
+          result.events.push('Payoff: fail. +12 heat. No intel bonus.' + (s.campaign ? ` Launch fee refunded: $${failedMissionPayout(s, missionId)}.` : ''));
         }
       }
     } else if (stage === 'scout') {
@@ -708,9 +733,9 @@
         m.status = 'failed';
         m.stage = 'done';
         const mdef = C.MISSIONS_BY_ID[missionId];
-        const partial = Math.round(mdef.reward * 0.5);
+        const partial = failedMissionPayout(s, missionId);
         s.money += partial;
-        result.story = 'Breach failed. Mission aborted; partial payout from pre-sold intel.';
+        result.story = s.campaign ? 'Breach failed. Mission aborted; launch fee recovered from pre-sold intel.' : 'Breach failed. Mission aborted; partial payout from pre-sold intel.';
         result.events.push(`Breach: fail. +20 heat. Mission aborts. +$${partial}.`);
       }
     } else if (stage === 'escape') {
@@ -743,7 +768,7 @@
         result.events.push(`Escape: pass. +$${reward}. +${infamyGain} infamy. Mission success.`);
       } else {
         const mdef2 = C.MISSIONS_BY_ID[missionId];
-        const partial = Math.round(mdef2.reward * 0.5);
+        const partial = failedMissionPayout(s, missionId);
         s.money += partial;
         s.heat = Math.min(100, s.heat + 25);
         for (const hid of (m.assigned || [])) {
@@ -754,7 +779,7 @@
         }
         m.status = 'failed_escape';
         m.stage = 'done';
-        result.story = `Escape failed (${inputs.plan}). Partial payout.`;
+        result.story = `Escape failed (${inputs.plan}). ${s.campaign ? 'Launch fee recovered.' : 'Partial payout.'}`;
         result.events.push(`Escape: fail. +25 heat. Partial +$${partial}.`);
       }
     }
@@ -908,7 +933,9 @@
     const availability = escapePlanAvailability(state, missionId);
     if (!availability[plan]) return { state, error: 'Unknown Escape plan' };
     if (!availability[plan].ok) return { state, error: 'Escape plan is locked: ' + availability[plan].reason };
-    return _resolveStage(state, missionId, 'escape', { plan }, 'deterministic');
+    const support = state.campaign ? campaignEscapeSupport(state,missionId,plan) : null;
+    // Everyone still faces the escape's stress costs; only relevant gear is used.
+    return _resolveStage(state, missionId, 'escape', support ? {plan, skill:support.skill, equipment:support.equipment} : { plan }, 'deterministic');
   }
 
   // Side-op resolvers (P4).

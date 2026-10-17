@@ -276,7 +276,7 @@
       const html = `
         ${headerFor(state, missionId, 'escape')}
         <h2 id="dlgTitle">🏃 Stage 4 · Escape</h2>
-        <p class="sub">No timer. Pick an escape plan. Risks reflect what you did in the prior stages — a botched Approach can lock some exits.</p>
+        <p class="sub">No timer. Pick an escape plan. Risks reflect what you did in the prior stages. A botched Approach can lock some exits.${state.campaign ? ' Fast uses science for a technical getaway; clever uses deception; loud uses force. Each plan relies on its best available specialist and matching gear. Everyone still takes escape stress.' : ''}</p>
         <div class="escape-list">${options.map(o => `
           <button class="escape-opt ${plan===o.plan?'sel':''}" data-p="${o.plan}" ${o.gate.ok?'':'disabled aria-disabled="true"'} title="${U.esc(o.gate.reason || o.gate.warn || '')}">
             <div class="escape-head">

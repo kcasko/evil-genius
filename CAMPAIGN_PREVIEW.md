@@ -22,6 +22,14 @@ Run `node scripts/verify-contest.mjs` for the existing gameplay/save/availabilit
 
 A separate browser walkthrough from a fresh save reached victory on day seven, including construction, research, recovery, and two failed prototype escapes. The milestone rule was refined during that playthrough to avoid repeating a proven shrink-ray test. Final balance was additionally checked with the seeded simulations. A human playtest is still needed before calling this a 10–15 minute game.
 
+## Balance follow-up
+
+Campaign failures now recover the launch fee without generating profit. Success rewards remain unchanged. Escape plans rely on one relevant specialist and matching equipment: fast uses science, clever uses deception, and loud uses force. Every assigned crew member still takes escape stress. Legacy short runs retain their previous rules.
+
+Independent strategy tests found recovery and repairs meaningful, while failures previously generated cash. A fresh browser campaign reached a heat defeat on day four after a failed prototype escape, despite retaining $652. This is a completed loss playthrough, not evidence of a victory or a human playtime benchmark.
+
+A fresh revised-balance browser run subsequently reached victory on day six with $801, 64% heat, and 74 infamy. Victory persisted after reload. All 97 tests passed. Long retry loops remain possible in deliberately poor-choice simulations.
+
 ## Contest follow-up
 
 The full Rules tab specifies YouTube, Vimeo, Facebook Video, or Youku for the public demo. The existing CloudFront-hosted video alone does not meet that hosting requirement. The rules give an October 23, 2026, 11:59 PM Pacific deadline and evaluation after close, but do not explicitly state a policy for revisions. Existing articles/projects expose edit controls. Leave the current entry available while reviewing this candidate; align the eventual approved source, game, article, and supported-platform video before the deadline.
