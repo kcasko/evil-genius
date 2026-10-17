@@ -6,7 +6,7 @@ In EVIL GENIUS, you run a villainous organization with a limited budget, a quest
 
 I built this browser game to explore a small but useful question: **could a decision model choose the right specialist for a mission without taking over the game?**
 
-[Play the game](https://d2gk454hfl6odl.cloudfront.net/) or [watch the updated demo](https://youtu.be/hlArbQHCHXE).
+[Play the game](https://d2gk454hfl6odl.cloudfront.net/) or [watch the updated demo](https://youtu.be/AxoIDTQoSzA).
 
 ## Earn your Moon shot
 
@@ -38,7 +38,7 @@ Each part has one job: **Decider chooses the specialist, the game resolves the c
 
 ## One real Moon heist, and the campaign around it
 
-The updated demo introduces the current campaign, then clearly labels an earlier live Moon-heist recording. In that recording, Decider chose science, putting Dr. Malpractice's skills to work. The Breach succeeded, Nova Lite supplied his dialogue, and the mission eventually reached victory.
+The updated 2-minute-11-second demo tours the current public campaign, shows a fresh payroll operation and next-day satellite unlock, and includes a victory capture from a separate full day-8 public playtest. It also clearly labels a short earlier live Moon-heist recording. In that recording, Decider chose science, putting Dr. Malpractice's skills to work. The Breach succeeded, Nova Lite supplied his dialogue, and the mission eventually reached victory.
 
 That was a real model response and a real game result. It was not a guaranteed win. In another live test, Decider answered successfully and the mission still failed its roll. The current campaign recovers the launch fee on a completed failure, without making failed missions profitable.
 
@@ -46,7 +46,7 @@ That distinction is part of the fun. Getting advice does not mean the universe o
 
 ## What did not go smoothly
 
-Waiting was the biggest problem. In the demo, Decider took about 70 seconds to respond on my CPU deployment. In the latest three-contract integration check, the first call took about 73 seconds and the later calls took about 21-22 seconds. These are observations from this deployment, not a speed guarantee. The video clearly labels its shortened wait.
+Waiting was the biggest problem. In the earlier live recording, Decider took about 70 seconds to respond on my CPU deployment. In the latest three-contract integration check, the first call took about 73 seconds and the later calls took about 21-22 seconds. These are observations from this deployment, not a speed guarantee. The updated video shows the response rather than replaying the startup wait.
 
 That taught me something more useful than a flattering speed claim: a game needs to keep working when the model does not answer quickly, or cannot answer at all.
 
@@ -70,5 +70,5 @@ The pattern demonstrated is **tool selection**: choosing among available special
 
 The experiment's lesson is simple: give the model a decision worth making, let the player see its consequences, and keep the rules in charge. If everything goes wrong, at least the accountant can explain why you cannot afford another Moon.
 
-*The demo combines a current campaign overview with clearly labeled earlier live decision footage. It is not a recording of a full current campaign. Older browser saves keep their original short-run rules; New Game starts the campaign.*
+*The 131-second demo is an edited current-build screenshot tour: fresh payroll mission choices, daily-limit fallback, next-day satellite unlock, and a separate verified day-8 victory capture. It includes 18 seconds of clearly labeled earlier real Decider/Nova footage. It is not a continuous full-campaign recording. Older browser saves keep their original short-run rules; New Game starts the campaign.*
 

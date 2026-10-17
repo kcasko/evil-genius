@@ -1,6 +1,6 @@
 # EVIL GENIUS campaign demo
 
-Public YouTube video: https://youtu.be/hlArbQHCHXE
+Public YouTube video: https://youtu.be/AxoIDTQoSzA
 
 Updated MP4: https://d2gk454hfl6odl.cloudfront.net/demo/evil-genius.mp4
 

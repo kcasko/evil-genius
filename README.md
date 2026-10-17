@@ -13,7 +13,7 @@ Contest pattern: **tool selection**. Tags: `#strands-decider-2b` and `#tool-sele
 - Play the live game and open its four-step guide.
 - Read the [published Builder Center article](https://builder.aws.com/content/3KnbpaYvMSHHRgLJsWOVOW6Dyc2/evil-genius-let-decider-choose-the-henchman) for the architecture, measured behavior, limits, and lessons.
 - Reuse `patterns/specialist-selection/` for a standalone typed-choice -> allowlisted-action recipe.
-- Watch the [updated campaign demo](https://youtu.be/hlArbQHCHXE). The video combines a campaign overview with clearly labeled earlier live Moon-heist footage. The startup wait is condensed; model responses and gameplay in that recording are real.
+- Watch the [updated campaign demo](https://youtu.be/AxoIDTQoSzA). The 131-second demo is an edited current-build screenshot tour: fresh payroll mission choices, daily-limit fallback, next-day satellite unlock, and a separate verified day-8 victory capture. It includes 18 seconds of clearly labeled earlier real Decider/Nova footage. It is not a continuous full-campaign recording.
 
 ## Run the static game locally
 

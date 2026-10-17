@@ -1,0 +1,90 @@
+{
+  "video": {
+    "format": {
+      "duration": "131.000000",
+      "size": "2345261"
+    }
+  },
+  "scenes": [
+    [
+      "intro",
+      "Your evil plan has a staffing problem.",
+      "Build a secret lair. Recruit questionable talent. Earn your shot at stealing the Moon.",
+      "CURRENT PUBLIC BUILD",
+      9
+    ],
+    [
+      "campaign",
+      "You have to earn the finale.",
+      "Raid payroll, hijack a satellite, and test the shrink ray. One operation per day gives your choices consequences.",
+      "CURRENT CAMPAIGN",
+      11
+    ],
+    [
+      "crew",
+      "Meet your terrible employees.",
+      "Science. Force. Deception. Finance. Match their strengths to the job, and watch their stress.",
+      "CREW MANAGEMENT",
+      10
+    ],
+    [
+      "build",
+      "Start with a Server Room.",
+      "Buildings take time. The Server Room supports research and covers your robot\u2019s upkeep. The Lab unlocks repairs.",
+      "BUILD YOUR LAIR",
+      10
+    ],
+    [
+      "loadout",
+      "Bring the right crew and gear.",
+      "For the payroll raid: an accountant, a deceptive robot, a ledger, and a deepfake rig. What could go wrong?",
+      "CURRENT PAYROLL RUN",
+      10
+    ],
+    [
+      "approach",
+      "Choose your way in.",
+      "The Front Door lets finance do the talking. The risk preview explains how the crew, equipment, and earlier intel affect the roll.",
+      "PLAYER CHOICES",
+      11
+    ],
+    [
+      "breach",
+      "Decider picks the specialist.",
+      "At Breach, the game asks Strands Decider to choose from the skills your crew can actually provide. The game engine still rolls the outcome.",
+      "WHERE THE AGENT HELPS",
+      11
+    ],
+    [
+      "fallback",
+      "The game keeps going at the limit.",
+      "This recording session had reached its daily AI allowance. The screen labels the local fallback honestly. No quota bypass.",
+      "CURRENT RUN: DAILY-LIMIT FALLBACK",
+      10
+    ],
+    [
+      "escape",
+      "You still choose the escape.",
+      "Fast, clever, or loud. Earlier mistakes can lock exits. A strong preview is a chance, not a promise.",
+      "CURRENT PAYROLL RUN",
+      10
+    ],
+    [
+      "unlocked",
+      "Tomorrow brings the next job.",
+      "The payroll milestone is secured. The satellite operation unlocks next day, while crises and crew recovery compete for your attention.",
+      "CURRENT CAMPAIGN PROGRESSION",
+      10
+    ],
+    [
+      "victory",
+      "The Moon can actually be stolen.",
+      "A separate full public playtest reached victory on day 8: $836, 54% heat, and 80 infamy. Its save survived reload exactly.",
+      "VERIFIED PUBLIC PLAYTEST CAPTURE",
+      11
+    ]
+  ],
+  "current_build": "f81afa02ed6008e11f3e53582de8a73897046b3b",
+  "earlier_inference_clip_seconds": 18,
+  "note": "Current-build screenshot tour, fresh payroll operation through daily-limit fallback, separate verified day-8 victory capture, and explicitly labeled earlier real inference clip. Not continuous campaign footage."
+}
