@@ -190,10 +190,13 @@
     s.pendingChains = stillPending;
 
     // Roll a new crisis via Crises module (uses scoped RNG)
-    let newCrises = Crises.rollDawnCrises(s, dueChildren);
+    const expired = Crises.expireOverdue(s);
+    Object.assign(s, expired.state);
+    events.push(...expired.events);
+    let newCrises = Crises.rollDawnCrises(s, dueChildren, expired.expiredIds);
     let empCancelled = false;
     // EMP Pulse is a strategic one-shot: cancel and consume the next crisis.
-    if (newCrises.length > 0 && s.equipment.includes('emp')) {
+    if (newCrises.length > 0 && workingEquipment(s, s.equipment).includes('emp')) {
       const cancelled = newCrises.shift();
       empCancelled = true;
       s.equipment = s.equipment.filter(id => id !== 'emp');
@@ -227,7 +230,7 @@
     s.bankruptcyCounter = s.debuffs.unpaid_upkeep_streak;
 
     s.outcome = checkOutcome(s);
-    s.log = ['Day ' + s.day + ' dawn: ' + (events[0] || 'quiet morning.'), ...(s.log || [])].slice(0, 120);
+    s.log = [...(events.length ? events : ['quiet morning.']).map(event => 'Day ' + s.day + ' dawn: ' + event), ...(s.log || [])].slice(0, 120);
     return { state: s, events, newCrises };
   }
 
@@ -414,7 +417,7 @@
     }
 
     // Equipment synergy
-    for (const eid of (inputs.equipment || m.loadout || [])) {
+    for (const eid of workingEquipment(state, inputs.equipment || m.loadout || [])) {
       const def = C.EQUIPMENT_BY_ID[eid];
       if (!def) continue;
       if (def.synergy && def.synergy === (inputs.skill || def.synergy)) {
@@ -465,7 +468,7 @@
         if (m.stageResults.find(r => r.stage === 'breach' && r.provider === 'override')) { modifier -= 10; reasons.push('Breach improvised: -10'); }
       }
       if (inputs.plan === 'loud') {
-        if ((m.assigned || []).includes('boris') && (m.loadout || []).includes('hammer')) { modifier += 15; reasons.push('Boris + Hammer: +15'); }
+        if ((m.assigned || []).includes('boris') && workingEquipment(state, m.loadout).includes('hammer')) { modifier += 15; reasons.push('Boris + Hammer: +15'); }
       }
       // B3: a botched approach makes every exit harder.
       if (m.stageResults.find(r => r.stage === 'approach' && !r.pass)) {
@@ -526,7 +529,7 @@
   }
 
   function applyMissionEndRecovery(s, m, events) {
-    if (!(m.loadout || []).includes('aid') || m.carriedBonuses.aidUsed) return;
+    if (!workingEquipment(s, m.loadout).includes('aid') || m.carriedBonuses.aidUsed) return;
     m.carriedBonuses.aidUsed = true;
     for (const hid of m.assigned || []) {
       const def = C.HENCHMEN_BY_ID[hid];
@@ -554,7 +557,7 @@
     const gen = Rng.scoped(s.seed, scope);
     let roll = Rng.rollPercent(gen);
     let pass = roll >= prob.effectiveDC;
-    const equipped = new Set(m.loadout || []);
+    const equipped = new Set(workingEquipment(s, m.loadout));
     const specialEvents = [];
 
     // Lucky Rabbit's Foot: deterministic one-time reroll on the first failed stage.
@@ -696,7 +699,7 @@
           result.events.push('Shrink ray tested successfully. The Moon preparation milestone is secured even if escape fails.');
         }
         // Hammer bonus infamy
-        if ((inputs.equipment || m.loadout).includes('hammer')) {
+        if (equipped.has('hammer')) {
           s.infamy += 3;
           result.events.push('Hammer success: +3 infamy.');
         }
@@ -757,7 +760,7 @@
     }
 
     // Equipment heat / morale / breakage
-    for (const eid of (inputs.equipment || m.loadout || [])) {
+    for (const eid of workingEquipment(s, inputs.equipment || m.loadout || [])) {
       const def = C.EQUIPMENT_BY_ID[eid];
       if (!def) continue;
       if (def.heatOnUse) s.heat = Math.min(100, s.heat + def.heatOnUse);
@@ -775,8 +778,9 @@
     // Boris random break (1 in 10)
     if ((inputs.henchmen || m.assigned).includes('boris')) {
       const g = Rng.scoped(s.seed, `equipment:boris_break:${s.day}:${stage}:${m.relaunchCount||0}`);
-      if (g() < 0.1 && (inputs.equipment || m.loadout).length > 0) {
-        const victim = (inputs.equipment || m.loadout)[Math.floor(g() * (inputs.equipment || m.loadout).length)];
+      const intact = workingEquipment(s, inputs.equipment || m.loadout);
+      if (g() < 0.1 && intact.length > 0) {
+        const victim = intact[Math.floor(g() * intact.length)];
         if (victim && !s.equipmentBroken.includes(victim)) {
           s.equipmentBroken.push(victim);
           result.events.push('Boris broke ' + C.EQUIPMENT_BY_ID[victim].name + '.');
@@ -875,7 +879,7 @@
       const hs = state.henchmen[h];
       if (!def || !hs) continue;
       let score = hs.competence * (def.traitBonus || 1.0);
-      for (const e of loadout) {
+      for (const e of workingEquipment(state, loadout)) {
         const edef = C.EQUIPMENT_BY_ID[e];
         if (edef && edef.synergy === def.skill) score *= 1.3;
       }
@@ -965,8 +969,12 @@
     return spendCommandPoint(state, { kind: 'dismiss_crisis', crisisId, choiceId });
   }
 
+  function workingEquipment(state, ids = []) {
+    return ids.filter(id => C.EQUIPMENT_BY_ID[id] && state.equipment.includes(id) && !state.equipmentBroken.includes(id));
+  }
+
   return {
-    createFreshGame, dawnTick, spendCommandPoint, startMission, abortMission, missionAvailability,
+    workingEquipment, createFreshGame, dawnTick, spendCommandPoint, startMission, abortMission, missionAvailability,
     resolveScout, resolveApproach, resolveBreach, resolveEscape, resolveCrisis,
     resolvePrepScout, resolvePrepPayoff,
     canExecutiveOverride, payExecutiveOverride, previewBreachSpecialist,

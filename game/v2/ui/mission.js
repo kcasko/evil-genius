@@ -101,7 +101,7 @@
   function openScout(state, missionId, bus) {
     const m = state.missions[missionId];
     const host = U.$('dialogHost');
-    let picked = { henchman: m.assigned[0], equipment: m.loadout[0] || null };
+    let picked = { henchman: m.assigned[0], equipment: E.workingEquipment(state, m.loadout)[0] || null };
     const render = () => {
       const risk = E.describeStageRisk(state, missionId, 'scout',
         { henchmen:[picked.henchman], equipment: picked.equipment?[picked.equipment]:[],
@@ -121,7 +121,7 @@
         <div class="loadout-head">EQUIPMENT (optional)</div>
         <div class="loadout-grid">
           <button class="pick ${picked.equipment===null?'sel':''}" data-e="">None</button>
-          ${m.loadout.map(e => {
+          ${E.workingEquipment(state, m.loadout).map(e => {
             const def = C.EQUIPMENT_BY_ID[e];
             return `<button class="pick ${picked.equipment===e?'sel':''}" data-e="${e}"><img class="gear-pick-icon" src="/art/gear-${e}.webp" alt="" width="48" height="48"><div class="pick-name">${U.esc(def.name)}</div></button>`;
           }).join('')}
@@ -354,7 +354,7 @@
     const m = state.missions.prep;
     const host = U.$('dialogHost');
     // Side ops allow one selected loadout item; it is used automatically here.
-    const picked = { henchman: m.assigned[0], equipment: m.loadout[0] || null };
+    const picked = { henchman: m.assigned[0], equipment: E.workingEquipment(state, m.loadout)[0] || null };
     const render = () => {
       const risk = E.describeStageRisk(state, 'prep', 'scout', {
         henchmen:[picked.henchman], skill: C.HENCHMEN_BY_ID[picked.henchman]?.skill,

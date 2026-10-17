@@ -321,16 +321,16 @@
 
 <script src="/game/v2/rng.js?v=b777e9143a6f"></script>
 <script src="/game/v2/content.js?v=eeba16d0fa70"></script>
-<script src="/game/v2/crises.js?v=85dcd3a6d71b"></script>
-<script src="/game/v2/engine.js?v=f4dd257ed620"></script>
+<script src="/game/v2/crises.js?v=db31a615ad43"></script>
+<script src="/game/v2/engine.js?v=fcd3d182c164"></script>
 <script src="/game/v2/save.js?v=be20e74e4b4d"></script>
 <script src="/game/aiClient.js?v=ba886674336c"></script>
 <script src="/game/aiStatus.js?v=cd70eebf0dfa"></script>
 <script src="/game/coldStartUx.js?v=31079421dbc9"></script>
 <script src="/game/v2/ui/common.js?v=df8f9147905c"></script>
-<script src="/game/v2/ui/crisis.js?v=3798793ae820"></script>
-<script src="/game/v2/ui/mission.js?v=5dd802a94eb3"></script>
-<script src="/game/v2/ui/hq.js?v=9f9c70d0c68d"></script>
+<script src="/game/v2/ui/crisis.js?v=0b85dfb7f1f1"></script>
+<script src="/game/v2/ui/mission.js?v=f025ecafc768"></script>
+<script src="/game/v2/ui/hq.js?v=1514a1d3fefd"></script>
 <script>
 (function(){
   const E = window.EvilGeniusV2Engine;
@@ -456,13 +456,13 @@
           decider = await AI.decide({
             mission: missionId, stage:'breach',
             available_tools: [...new Set(m.assigned.map(h => C.HENCHMEN_BY_ID[h].skill))],
-            plan: JSON.stringify({objective:C.MISSIONS_BY_ID[missionId].desc, assigned: m.assigned.map(h => ({id:h, skill:C.HENCHMEN_BY_ID[h].skill, competence:session.state.henchmen[h].competence})), equipment:m.loadout}),
+            plan: JSON.stringify({objective:C.MISSIONS_BY_ID[missionId].desc, assigned: m.assigned.map(h => ({id:h, skill:C.HENCHMEN_BY_ID[h].skill, competence:session.state.henchmen[h].competence})), equipment:E.workingEquipment(session.state,m.loadout)}),
             assigned_henchmen: m.assigned.map(h => ({
               id:h, competence: session.state.henchmen[h].competence,
               stress: session.state.henchmen[h].stress || 0,
               trait: C.HENCHMEN_BY_ID[h].trait
             })),
-            equipment: m.loadout, heat: session.state.heat, morale: session.state.morale,
+            equipment: E.workingEquipment(session.state,m.loadout), heat: session.state.heat, morale: session.state.morale,
             recent_events: session.state.log.slice(0,3), player_id: session.state.playerId,
           });
           if (decider && decider.fallback) {
