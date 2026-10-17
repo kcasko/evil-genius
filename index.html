@@ -217,7 +217,7 @@
   #buildArea > .card > .mini:last-child, #researchArea > .card > .mini:last-child {
     margin-top:auto;padding-top:6px;
   }
-</style>
+.campaign-panel{padding:20px;margin:0 0 20px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}.campaign-panel h3{margin-top:0}.campaign-panel p,.campaign-panel li{color:var(--muted);line-height:1.6}.mission-lock{color:var(--lime);font-size:14px}.contract-art{object-fit:contain!important;background:#14111f}.campaign-panel[hidden]{display:none}</style>
 </head>
 <body>
 <div class="shell">
@@ -269,7 +269,7 @@
     <summary>How to play <span>YOUR FOUR-STEP EVIL PLAN</span></summary>
     <ol class="guide-steps">
       <li><span class="step-number" aria-hidden="true">01</span><h3>Build your lair</h3><p>Start with a <strong>Server Room</strong> ($250, 1 Command Point). It takes one day to build, then earns research and covers CHAOS's daily upkeep.</p></li>
-      <li><span class="step-number" aria-hidden="true">02</span><h3>Pick your crew</h3><p>The Moon mission needs <strong>2–4 henchmen</strong> and allows up to <strong>2 pieces of gear</strong>. Match skills to the job. Lunar Recon is optional prep for a useful bonus.</p></li>
+      <li><span class="step-number" aria-hidden="true">02</span><h3>Earn your Moon shot</h3><p>Start with <strong>Raid Rival Payroll</strong>, then unlock the satellite and shrink-ray jobs. Build the <strong>Server Room and Laboratory</strong> and research gear before the finale. One operation can launch each day.</p></li>
       <li><span class="step-number" aria-hidden="true">03</span><h3>Run the heist</h3><p><strong>Scout → Approach → Breach → Escape.</strong> Pick exactly two crew for Approach. The AI advises on Breach; the game roll decides success. Offline play uses a local fallback.</p></li>
       <li><span class="step-number" aria-hidden="true">04</span><h3>Handle the fallout</h3><p>Resolve crises and rest stressed crew. You get <strong>2 Command Points each day</strong>. Unspent points disappear when you end the day. Dawn brings income, upkeep, and possible trouble.</p></li>
     </ol>
@@ -281,7 +281,7 @@
       <div id="crisisArea"></div>
 
       <div class="section-head"><h2>World Domination Plans</h2><span>CHOOSE YOUR NEXT DISASTER</span></div>
-      <div class="cards" id="missionArea"></div>
+      <section class="campaign-panel" id="campaignPanel" hidden></section><div class="cards" id="missionArea"></div>
 
       <div class="section-head"><h2>Lair status</h2><span>WHAT YOU OWN AND WHAT IT COSTS</span></div>
       <div class="cards" id="lairStatus"></div>
@@ -319,18 +319,18 @@
 <div id="dialogHost"></div>
 <div id="endscreen" class="endscreen"></div>
 
-<script src="/game/v2/rng.js?v=3e0da94c9ddf"></script>
-<script src="/game/v2/content.js?v=6f02c595c6b5"></script>
-<script src="/game/v2/crises.js?v=4d3ca31be622"></script>
-<script src="/game/v2/engine.js?v=fb8a56c8f3b0"></script>
-<script src="/game/v2/save.js?v=e5d5cf739b0e"></script>
+<script src="/game/v2/rng.js?v=b777e9143a6f"></script>
+<script src="/game/v2/content.js?v=eeba16d0fa70"></script>
+<script src="/game/v2/crises.js?v=85dcd3a6d71b"></script>
+<script src="/game/v2/engine.js?v=f4dd257ed620"></script>
+<script src="/game/v2/save.js?v=be20e74e4b4d"></script>
 <script src="/game/aiClient.js?v=ba886674336c"></script>
 <script src="/game/aiStatus.js?v=cd70eebf0dfa"></script>
 <script src="/game/coldStartUx.js?v=31079421dbc9"></script>
 <script src="/game/v2/ui/common.js?v=df8f9147905c"></script>
 <script src="/game/v2/ui/crisis.js?v=3798793ae820"></script>
-<script src="/game/v2/ui/mission.js?v=9caca04ea4fe"></script>
-<script src="/game/v2/ui/hq.js?v=c9d8a38254c2"></script>
+<script src="/game/v2/ui/mission.js?v=5dd802a94eb3"></script>
+<script src="/game/v2/ui/hq.js?v=9f9c70d0c68d"></script>
 <script>
 (function(){
   const E = window.EvilGeniusV2Engine;
@@ -365,7 +365,7 @@
     const url = new URL(location.href);
     const seed = url.searchParams.get('seed') || undefined;
     const pid = getPlayerId();
-    const fresh = E.createFreshGame({ playerId: pid, seed });
+    const fresh = E.createFreshGame({ playerId: pid, seed, campaign:true });
     Save.save(fresh);
     return fresh;
   }
@@ -456,7 +456,7 @@
           decider = await AI.decide({
             mission: missionId, stage:'breach',
             available_tools: [...new Set(m.assigned.map(h => C.HENCHMEN_BY_ID[h].skill))],
-            plan: JSON.stringify({assigned: m.assigned.map(h => ({id:h, skill:C.HENCHMEN_BY_ID[h].skill, competence:session.state.henchmen[h].competence})), equipment:m.loadout}),
+            plan: JSON.stringify({objective:C.MISSIONS_BY_ID[missionId].desc, assigned: m.assigned.map(h => ({id:h, skill:C.HENCHMEN_BY_ID[h].skill, competence:session.state.henchmen[h].competence})), equipment:m.loadout}),
             assigned_henchmen: m.assigned.map(h => ({
               id:h, competence: session.state.henchmen[h].competence,
               stress: session.state.henchmen[h].stress || 0,
@@ -521,7 +521,7 @@
   bus.on('new-game', () => {
     const pid = getPlayerId();
     Save.reset(pid);
-    session.state = E.createFreshGame({ playerId: pid });
+    session.state = E.createFreshGame({ playerId: pid, campaign:true });
     Save.save(session.state);
     U.$('endscreen').style.display = 'none';
     rerender();

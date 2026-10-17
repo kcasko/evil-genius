@@ -47,6 +47,18 @@
 
   // --- Missions ---
   const MISSIONS = [
+    { id:'funding', name:'Raid Rival Payroll', icon:'💼', reward:200, heat:5, unlocked:true, campaignOnly:true,
+      art:'gear-ledger', difficulty:-10, favoredSkills:['finance','deception'], launchCp:1, launchCost:40,
+      stages:['scout','approach','breach','escape'], minHenchmen:2, maxHenchmen:3, maxEquipment:2,
+      desc:'Steal a rival villain’s payroll. Finance or deception gets +10. Earn cash to expand your lair. Costs $40 + 1 CP.' },
+    { id:'satellite', name:'Hijack the Uplink', icon:'📡', reward:220, heat:7, unlocked:true, campaignOnly:true,
+      art:'building-server_room', difficulty:0, favoredSkills:['science','deception'], launchCp:1, launchCost:60,
+      stages:['scout','approach','breach','escape'], minHenchmen:2, maxHenchmen:3, maxEquipment:2,
+      desc:'Borrow a weather satellite. Permanently gives Moon stages +5. Science or deception gets +10. Costs $60 + 1 CP.' },
+    { id:'prototype', name:'Field-test the Shrink Ray', icon:'🧪', reward:260, heat:9, unlocked:true, campaignOnly:true,
+      art:'gear-tractor', difficulty:5, favoredSkills:['science','force'], launchCp:1, launchCost:80,
+      stages:['scout','approach','breach','escape'], minHenchmen:2, maxHenchmen:3, maxEquipment:2,
+      desc:'Test the invention on a rival’s warehouse. A successful Breach secures the Moon milestone (+5 Breach), even if escape fails. Science or force gets +10. Costs $80 + 1 CP.' },
     { id:'moon',    name:'Steal the Moon',    icon:'🌕', reward:380, heat:18, unlocked:true,
       stages:['scout','approach','breach','escape'], minHenchmen:2, maxHenchmen:4, maxEquipment:2,
       desc:'A modest first step. One small theft for a villain, one enormous insurance claim for mankind.' },

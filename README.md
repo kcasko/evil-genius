@@ -1,5 +1,7 @@
 # EVIL GENIUS V2
 
+**Local campaign preview:** this branch adds a progression campaign and has not replaced the public game. Read [CAMPAIGN_PREVIEW.md](CAMPAIGN_PREVIEW.md) for the new loop, local play instructions, verification, and remaining contest work.
+
 A turn-based villain management game with one bounded AI decision: **Strands Decider 2B selects the Breach specialist; the game engine resolves the consequences; Amazon Bedrock Nova Lite adds cosmetic dialogue.**
 
 Live game: https://d2gk454hfl6odl.cloudfront.net/

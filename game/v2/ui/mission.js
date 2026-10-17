@@ -110,7 +110,7 @@
       const html = `
         ${headerFor(state, missionId, 'scout')}
         <h2 id="dlgTitle">👁 Stage 1 · Scout</h2>
-        <p class="sub">Send one henchman to case the moon's security. Pass → intel bonus into Approach and Breach. Fail → heat +15 and a nasty Approach penalty.</p>
+        <p class="sub">Send one henchman to scout ${U.esc(C.MISSIONS_BY_ID[missionId].name)}. Pass → intel bonus into Approach and Breach. Fail → heat +15 and an Approach penalty.</p>
         <div class="loadout-head">PICK ONE</div>
         <div class="loadout-grid">${m.assigned.map(h => {
           const def = C.HENCHMEN_BY_ID[h];

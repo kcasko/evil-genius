@@ -41,7 +41,7 @@
       henchmen[h.id] = base;
     }
 
-    return {
+    const state = {
       schema: 'v02',
       seed,
       playerId,
@@ -80,6 +80,38 @@
       log: ['Day 1: Evil Genius Incorporated established. No refunds.'],
       outcome: 'running',
     };
+    if (opts.campaign) {
+      state.campaign = { version:1, lastOperationDay:0 };
+      for (const id of ['funding','satellite','prototype']) state.missions[id] = {
+        stage:'idle', status:'pending', assigned:[], loadout:[], stageResults:[],
+        carriedBonuses:{}, attemptCounters:{}, relaunchCount:0,
+      };
+      state.log.unshift('Campaign: earn the payroll, satellite link, and shrink ray before the Moon heist.');
+    }
+    return state;
+  }
+
+  // Existing saves keep their original rules. New browser games opt into this campaign.
+  function missionAvailability(state, missionId) {
+    const def = C.MISSIONS_BY_ID[missionId];
+    const no = reason => ({ok:false, reason});
+    if (!def?.unlocked || (def.campaignOnly && !state.campaign)) return no('Mission not available');
+    if (state.outcome !== 'running') return no('This run has ended. Start a new game.');
+    if (!state.campaign) return {ok:true, reason:''};
+    const done = id => state.missions[id]?.status === 'success' || (id === 'prototype' && state.missions[id]?.carriedBonuses?.prototypeTested === true);
+    if (Object.values(state.missions).some(m => !['idle','done'].includes(m.stage))) return no('Finish or forfeit your active operation first.');
+    if (state.campaign.lastOperationDay === state.day) return no('The crew has used today’s operation slot. Prepare the lair and launch tomorrow.');
+    if (['satellite','prototype','moon'].includes(missionId) && !done('funding')) return no('Complete Raid Rival Payroll first.');
+    if (['satellite','prototype','moon'].includes(missionId) && !state.buildings.includes('server_room')) return no('Build a Server Room and let construction finish.');
+    if (['prototype','moon'].includes(missionId) && !done('satellite')) return no('Complete Hijack the Uplink first.');
+    if (['prototype','moon'].includes(missionId) && (!state.buildings.includes('lab') || state.debuffs.lab_offline_days > 0)) return no('Build an online Laboratory.');
+    if (missionId === 'moon' && !done('prototype')) return no('Complete Field-test the Shrink Ray first.');
+    if (missionId === 'moon' && !state.campaign.researchCompleted && !state.equipmentUnlocked.length) return no('Research at least one piece of equipment.');
+    const cp = missionId === 'moon' ? 2 : def.launchCp || 0;
+    const cost = missionId === 'moon' ? 150 : def.launchCost || 0;
+    if (state.cp < cp) return no(`Need ${cp} Command Points to launch.`);
+    if (state.money < cost) return no(`Need $${cost} to launch.`);
+    return {ok:true, reason:''};
   }
 
   // --- dawn tick ---
@@ -201,6 +233,7 @@
 
   // --- spendCommandPoint (HQ actions) ---
   function spendCommandPoint(state, action) {
+    if (state.campaign && state.outcome !== 'running') return {state, error:'This run has ended.'};
     const s = clone(state);
     const events = [];
     switch (action.kind) {
@@ -228,6 +261,7 @@
         s.cp -= 1; s.research -= def.unlockRP;
         s.equipmentUnlocked.push(def.id);
         s.equipment.push(def.id);
+        if (s.campaign) s.campaign.researchCompleted = true;
         events.push('Researched: ' + def.name + '.');
         break;
       }
@@ -262,7 +296,15 @@
         for (const e of resolution.events) events.push(e);
         break;
       }
+      case 'laylow': {
+        if (!s.campaign || s.heat <= 8) return {state, error:'No need to lay low yet.'};
+        if (s.cp < 1 || s.money < 25) return {state, error:'Laying low needs $25 and 1 CP.'};
+        s.cp -= 1; s.money -= 25; s.heat = Math.max(0, s.heat - 15);
+        events.push('Laying low: -15 heat, -$25, -1 CP.');
+        break;
+      }
       case 'end_day': {
+        if (s.campaign && Object.values(s.missions).some(m => !['idle','done'].includes(m.stage))) return {state, error:'Finish or forfeit the active operation before ending the day.'};
         const dawn = dawnTick(s);
         return { state: dawn.state, events: [...events, ...dawn.events] };
       }
@@ -276,6 +318,8 @@
 
   // --- start mission ---
   function startMission(state, missionId, loadout) {
+    const availability = missionAvailability(state, missionId);
+    if (!availability.ok) return {state, error:availability.reason};
     const s = clone(state);
     const mdef = C.MISSIONS_BY_ID[missionId];
     if (!mdef || !mdef.unlocked) return { state, error: 'Mission not available' };
@@ -297,18 +341,19 @@
       if (!s.equipment.includes(e)) return { state, error: 'Equipment not owned: ' + e };
       if (s.equipmentBroken.includes(e)) return { state, error: 'Equipment broken: ' + e };
     }
-    const launchCp = mdef.launchCp || 0;
-    const launchCost = mdef.launchCost || 0;
+    const launchCp = s.campaign && missionId === 'moon' ? 2 : mdef.launchCp || 0;
+    const launchCost = s.campaign && missionId === 'moon' ? 150 : mdef.launchCost || 0;
     if (s.cp < launchCp) return { state, error: `Need ${launchCp} CP to launch` };
     if (s.money < launchCost) return { state, error: `Need $${launchCost} to launch` };
     s.cp -= launchCp;
     s.money -= launchCost;
+    if (s.campaign) s.campaign.lastOperationDay = s.day;
     m.stage = (mdef.stages && mdef.stages[0]) || 'scout';
     m.status = 'in_progress';
     m.assigned = hens;
     m.loadout = eq;
     m.stageResults = [];
-    m.carriedBonuses = {};
+    m.carriedBonuses = m.carriedBonuses?.prototypeTested ? {prototypeTested:true} : {};
     m.attemptCounters = {};
     // B2 fix: bump relaunchCount so retries roll differently under the same seed.
     m.relaunchCount = (m.relaunchCount || 0) + 1;
@@ -325,6 +370,15 @@
     let modifier = 0;
     const reasons = [];
     const roster = inputs.henchmen || m.assigned;
+
+    if (state.campaign) {
+      const def = C.MISSIONS_BY_ID[missionId];
+      dc += def.difficulty || 0;
+      if (def.difficulty) reasons.push(`Operation difficulty: ${def.difficulty} DC`);
+      if (def.favoredSkills?.includes(inputs.skill)) { modifier += 10; reasons.push(`Useful specialty (${inputs.skill}): +10`); }
+      if (missionId === 'moon' && state.missions.satellite?.status === 'success') { modifier += 5; reasons.push('Satellite uplink: +5'); }
+      if (missionId === 'moon' && stage === 'breach' && (state.missions.prototype?.status === 'success' || state.missions.prototype?.carriedBonuses?.prototypeTested)) { modifier += 5; reasons.push('Tested shrink ray: +5'); }
+    }
 
     // One-shot DC bump from C8 (R5 debuff). Consumed when this stage ends.
     const nextDc = state.debuffs?.next_dc || 0;
@@ -637,6 +691,10 @@
         m.carriedBonuses.rewardBonus = bonus;
         result.story = 'Breach clean. Payout bonus unlocked.';
         result.events.push(`Breach: pass. +${bonus} bonus reward on success.`);
+        if (s.campaign && missionId === 'prototype') {
+          m.carriedBonuses.prototypeTested = true;
+          result.events.push('Shrink ray tested successfully. The Moon preparation milestone is secured even if escape fails.');
+        }
         // Hammer bonus infamy
         if ((inputs.equipment || m.loadout).includes('hammer')) {
           s.infamy += 3;
@@ -660,7 +718,7 @@
         const reward = mdef.reward + (m.carriedBonuses.rewardBonus || 0);
         s.money += reward;
         // B3: infamy scales with how many prior stages passed. Approach fail drops it.
-        let infamyGain = 8 * priorPasses + 8;
+        let infamyGain = s.campaign && mdef.campaignOnly ? 8 + 2 * priorPasses : 8 * priorPasses + 8;
         if (approachFailed) infamyGain = Math.max(4, infamyGain - 8);
         s.infamy += infamyGain;
         if (inputs.plan === 'loud') {
@@ -908,7 +966,7 @@
   }
 
   return {
-    createFreshGame, dawnTick, spendCommandPoint, startMission, abortMission,
+    createFreshGame, dawnTick, spendCommandPoint, startMission, abortMission, missionAvailability,
     resolveScout, resolveApproach, resolveBreach, resolveEscape, resolveCrisis,
     resolvePrepScout, resolvePrepPayoff,
     canExecutiveOverride, payExecutiveOverride, previewBreachSpecialist,

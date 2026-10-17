@@ -35,7 +35,9 @@
     if (!Array.isArray(s.buildQueue) || !s.buildQueue.every(q => object(q) && Object.hasOwn(C.BUILDINGS_BY_ID,q.id) && number(q.daysLeft))) fail();
     if (!Array.isArray(s.crises) || !s.crises.every(c => object(c) && Object.hasOwn(C.CRISES_BY_ID,c.id) && number(c.appearedDay))) fail();
     if (!Array.isArray(s.pendingChains) || !s.pendingChains.every(p => object(p) && Object.hasOwn(C.CRISES_BY_ID,p.child) && number(p.dueDay))) fail();
-    for (const id of ['moon','prep']) {
+    if (s.campaign && (!object(s.campaign) || s.campaign.version !== 1 || !Number.isInteger(s.campaign.lastOperationDay) || s.campaign.lastOperationDay < 0 || s.campaign.lastOperationDay > s.day)) fail();
+    if (s.campaign?.researchCompleted != null && typeof s.campaign.researchCompleted !== 'boolean') fail();
+    for (const id of (s.campaign ? ['moon','prep','funding','satellite','prototype'] : ['moon','prep'])) {
       const m = s.missions[id];
       if (!object(m) || !['idle','scout','approach','breach','escape','done'].includes(m.stage)
           || !['pending','in_progress','success','partial','aborted','failed','failed_escape'].includes(m.status)
@@ -61,6 +63,7 @@
       if (!m.carriedBonuses) m.carriedBonuses = {};
       if (!m.stageResults) m.stageResults = [];
     }
+    if (s.campaign && Array.isArray(s.missions.prototype?.stageResults) && s.missions.prototype.stageResults.some(r => r?.stage === 'breach' && r.pass)) s.missions.prototype.carriedBonuses.prototypeTested = true;
     s.debuffs = s.debuffs || {};
     if (s.debuffs.unpaid_upkeep_streak == null) s.debuffs.unpaid_upkeep_streak = 0;
     if (s.debuffs.moon_intel_days == null) s.debuffs.moon_intel_days = 0;

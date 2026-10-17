@@ -96,29 +96,43 @@
     }).join('') : '<li class="sub">Nothing broken. For now.</li>';
     U.$('brokenArea').innerHTML = `<ul class="broken-list">${brokenHtml}</ul>`;
 
+    const campaignPanel = U.$('campaignPanel');
+    if (campaignPanel) {
+      campaignPanel.hidden = !state.campaign;
+      if (state.campaign) {
+        const goals = [['funding','Raid Rival Payroll'],['satellite','Hijack the Uplink'],['prototype','Field-test the Shrink Ray']];
+        campaignPanel.innerHTML = `<h3>Your road to the Moon</h3><p>Secure the payroll and satellite, successfully test the shrink ray, build the Server Room and Laboratory, and research gear. One launch per day, including retries. Use the remaining time to manage the crew.</p><ol>${goals.map(([id,name]) => `<li>${(state.missions[id]?.status === 'success' || (id === 'prototype' && state.missions[id]?.carriedBonuses?.prototypeTested)) ? '✓' : '○'} ${esc(name)}</li>`).join('')}<li>${(state.campaign.researchCompleted || state.equipmentUnlocked.length) ? '✓' : '○'} Research equipment</li><li>Finale: Steal the Moon ($150 + 2 CP)</li></ol><button class="secondary small" data-laylow ${state.cp < 1 || state.money < 25 || state.heat <= 8 ? 'disabled' : ''}>Lay low: -15 Heat ($25, 1 CP)</button>`;
+        campaignPanel.querySelector('[data-laylow]').onclick = () => bus.emit('action', {kind:'laylow'});
+      }
+    }
+
     // Mission panel — every unlocked mission tracks its own stage.
     U.$('missionArea').innerHTML = C.MISSIONS.map(m => {
-      if (!m.unlocked) return '';
+      if (!m.unlocked || (m.campaignOnly && !state.campaign)) return '';
       const ms = state.missions[m.id];
       const inProgress = ms.stage !== 'idle' && ms.stage !== 'done';
-      const btn = (ms.status === 'success' && m.id === 'prep') ? '<div class="mini verdict good">INTEL ACQUIRED</div><button class="action" data-launch="prep">Run again</button>' :
+      let btn = (ms.status === 'success' && m.id === 'prep') ? '<div class="mini verdict good">INTEL ACQUIRED</div><button class="action" data-launch="prep">Run again</button>' :
                   ms.status === 'success' ? '<div class="mini verdict good">COMPLETE</div>' :
                   ms.status === 'aborted' ? `<div class="mini verdict bad">FORFEITED — try again?</div><button class="action" data-launch="${m.id}">Launch again</button>` :
                   ms.status === 'failed' || ms.status === 'failed_escape' ? `<div class="mini verdict bad">FAILED — try again?</div><button class="action" data-launch="${m.id}">Launch again</button>` :
                   inProgress ? `<button class="action" data-resume="${m.id}">Resume (${ms.stage})</button>` :
                   `<button class="action" data-launch="${m.id}">Launch Operation ↗</button>`;
+      const availability = E.missionAvailability(state, m.id);
+      if (state.campaign && !inProgress && ms.status !== 'success' && !availability.ok) btn = `<p class="mission-lock">${esc(availability.reason)}</p><button class="secondary" disabled>Not ready yet</button>`;
+      if (state.campaign && m.id === 'prep' && !inProgress && !availability.ok) btn = `<p class="mission-lock">${esc(availability.reason)}</p><button class="secondary" disabled>Not ready yet</button>`;
+      if (state.campaign && m.id === 'prototype' && ms.carriedBonuses?.prototypeTested) btn = '<div class="mini verdict good">SHRINK RAY TESTED · MOON MILESTONE SECURED</div>' + (inProgress ? btn : '<p>Preparation secured. Escape determines how much loot you bring home.</p>');
       // Side-op intel pill on the Moon card.
       const intelPill = (m.id === 'moon' && state.debuffs?.moon_intel_days > 0)
         ? `<div class="pill good">Side-op intel: ${state.debuffs.moon_intel_source} +15 (${state.debuffs.moon_intel_days}d)</div>` : '';
-      return `<article class="card"><img class="mission-art" src="/art/${m.id}.webp" alt="${esc(m.name)} mission illustration" width="768" height="512" loading="lazy"><h3>${esc(m.name)}</h3>
+      return `<article class="card"><img class="mission-art ${m.campaignOnly ? 'contract-art' : ''}" src="/art/${m.art || m.id}.webp" alt="${esc(m.name)} illustration" width="768" height="512" loading="lazy"><h3>${esc(m.name)}</h3>
         <div class="pill">reward $${m.reward} · +${m.heat}% heat</div>${intelPill}
-        <p>${esc(m.desc)}</p>${btn}</article>`;
+        <p>${esc(state.campaign && m.id === 'moon' ? 'The finale. Spend $150 and 2 CP to attempt the lunar heist. Your uplink and tested shrink ray improve the odds.' : m.desc)}</p>${btn}</article>`;
     }).join('');
 
     // End-day button
     const endBtn = U.$('endDayBtn');
     if (endBtn) {
-      endBtn.disabled = state.outcome !== 'running';
+      endBtn.disabled = state.outcome !== 'running' || (state.campaign && Object.values(state.missions).some(m => !['idle','done'].includes(m.stage)));
       endBtn.textContent = state.outcome === 'running' ? `End day ${state.day} →` : state.outcome.replace(/_/g,' ').toUpperCase();
     }
 
@@ -152,7 +166,7 @@
     if (state.outcome !== 'running') return 'Export your save blob below to share this seed. New Game resets.';
     const active = Object.entries(state.missions).find(([,m]) => m.stage !== 'idle' && m.stage !== 'done');
     if (active) return `${C.MISSIONS_BY_ID[active[0]]?.name || active[0]} in progress — stage: ${active[1].stage.toUpperCase()}.`;
-    return `Day ${state.day}. ${state.cp} Command Points available.`;
+    return `Day ${state.day}. ${state.cp} Command Points available.${state.campaign ? ' Build your road to the Moon.' : ' Legacy short run preserved. New Game starts the full campaign.'}`;
   }
 
   function renderEndscreen(state, bus) {
