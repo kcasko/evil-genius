@@ -5,7 +5,7 @@
   function open(state, crisisId, bus) {
     const def = C.CRISES_BY_ID[crisisId];
     if (!def) return;
-    const deadline = state.campaign && root.EvilGeniusV2Crises.expirationInfo(state.crises.find(c => c.id === crisisId));
+    const deadline = state.campaign && root.EvilGeniusV2Crises.expirationInfo(state.crises.find(c => c.id === crisisId), state);
     const html = `
       <div class="eyebrow">CRISIS // DAY ${state.day}</div>
       <div class="crisis-modal-heading"><img class="crisis-icon" src="/art/${U.crisisArt(crisisId)}.webp" alt="" width="64" height="64"><h2 id="dlgTitle">⚠ ${U.esc(def.title)}</h2></div>

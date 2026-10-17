@@ -42,7 +42,7 @@
     // Crisis cards
     U.$('crisisArea').innerHTML = state.crises.length ? state.crises.map(c => {
       const def = C.CRISES_BY_ID[c.id];
-      const deadline = state.campaign && root.EvilGeniusV2Crises.expirationInfo(c);
+      const deadline = state.campaign && root.EvilGeniusV2Crises.expirationInfo(c, state);
       return `<article class="crisis-card">
         <div class="crisis-identity"><img class="crisis-icon" src="/art/${U.crisisArt(c.id)}.webp" alt="" width="48" height="48"><div class="crisis-head">⚠ ${esc(def.title)}</div></div>
         ${deadline ? `<p class="sub">Resolve before dawn day ${deadline.dueDay}. If ignored: ${esc(deadline.label)}.</p>` : ''}

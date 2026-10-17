@@ -133,15 +133,16 @@
     C13_dolores_gossip:['ignore','-5 morale'], C14_equip_rust:['ignore','one piece of equipment breaks'],
     C15_boris_bored:[null,'+15 Boris rage'], C16_kevin_pitch:[null,'-$40 wasted supplies']
   };
-  function expirationInfo(active) {
+  function expirationInfo(active, state) {
     const rule = defaults[active?.id];
+    if (active?.id === 'C9_equip_theft' && state?.buildings.includes('vault')) return {dueDay:(active.appearedDay || 1)+2, label:'Vault security prevents theft'};
     return rule ? {dueDay:(active.appearedDay || 1)+2, label:rule[1]} : null;
   }
   function expireOverdue(state) {
     let s = clone(state); const events = [], expiredIds = [];
     if (!s.campaign) return {state:s, events, expiredIds};
     for (const active of [...s.crises]) {
-      const info = expirationInfo(active);
+      const info = expirationInfo(active, s);
       if (!info || s.day < info.dueDay) continue;
       const choice = defaults[active.id][0];
       if (choice) {
