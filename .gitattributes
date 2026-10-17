@@ -1,0 +1,4 @@
+# Preserve the exact served bytes across Windows and other checkouts.
+index.html -text
+game/** -text
+art/** -text
