@@ -53,6 +53,8 @@
     const body=await request('/api/narrate',requestBody,15000,options);
     if(!body.fallback && typeof body.narration==='string'){
       const prose=body.narration.replace(/\bCHAOS-9000\b/gi,'CHAOS');
+      // Spending messages come from the engine, never generated flavor text.
+      if(/\b(?:CP|command[\s-]+points?)\b/i.test(prose))return fallback('/api/narrate','unsupported_command_points');
       if(/[0-9%$]|\bpercent(?:age)?\b/i.test(prose))return fallback('/api/narrate','unsupported_numbers');
     }
     return body;
