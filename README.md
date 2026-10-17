@@ -1,6 +1,6 @@
 # EVIL GENIUS V2
 
-**Local campaign preview:** this branch adds a progression campaign and has not replaced the public game. Read [CAMPAIGN_PREVIEW.md](CAMPAIGN_PREVIEW.md) for the new loop, local play instructions, verification, and remaining contest work.
+**Deployed campaign:** raid the payroll, hijack the uplink, and test the shrink ray before the Moon finale. Earned contract milestones survive failed escapes; completed failures earn capped retry help. Read [CAMPAIGN_PREVIEW.md](CAMPAIGN_PREVIEW.md) for the development and verification history. Existing short-run saves are preserved; New Game starts the campaign.
 
 A turn-based villain management game with one bounded AI decision: **Strands Decider 2B selects the Breach specialist; the game engine resolves the consequences; Amazon Bedrock Nova Lite adds cosmetic dialogue.**
 
@@ -13,7 +13,7 @@ Contest pattern: **tool selection**. Tags: `#strands-decider-2b` and `#tool-sele
 - Play the live game and open its four-step guide.
 - Read the [published Builder Center article](https://builder.aws.com/content/3KnbpaYvMSHHRgLJsWOVOW6Dyc2/evil-genius-let-decider-choose-the-henchman) for the architecture, measured behavior, limits, and lessons.
 - Reuse `patterns/specialist-selection/` for a standalone typed-choice -> allowlisted-action recipe.
-- Watch the [88-second live demo](https://d2gk454hfl6odl.cloudfront.net/demo/evil-genius.mp4). The explicitly labeled startup wait is condensed; model responses and gameplay are real.
+- Watch the [updated campaign demo](https://youtu.be/hlArbQHCHXE). The video combines a campaign overview with clearly labeled earlier live Moon-heist footage. The startup wait is condensed; model responses and gameplay in that recording are real.
 
 ## Run the static game locally
 
@@ -51,7 +51,7 @@ The game stays playable when paid inference is disabled. The browser applies no 
 
 ## Source provenance and deployment
 
-This candidate starts from immutable release `4744f50f2b48a13c29833abbe099099b5f8792d8` and includes the later reviewed deployment overlays, save fixes, tutorial, artwork, portraits, and debrief. `SOURCE_PROVENANCE.json` records file hashes and comparisons with the served asset set. The original checkout was left unchanged.
+This deployed campaign starts from immutable release `4744f50f2b48a13c29833abbe099099b5f8792d8` and includes the later reviewed deployment overlays, save fixes, tutorial, artwork, portraits, and debrief. `SOURCE_PROVENANCE.json` records file hashes and comparisons with the served asset set. The original checkout was left unchanged.
 
 The CloudFormation templates are the campaign's source, not an instruction to deploy into the original account. Review names, artifact paths, IAM, alerts, expiry, quotas, runtime settings, and cleanup before using them in another environment. They can incur charges. No deployment runs when this archive is opened or when the local examples above are executed.
 
@@ -66,3 +66,7 @@ Earlier design reports, deployment plans, and preflight drafts are preserved for
 ## Credits and license
 
 Project source is under the included MIT license. The source package includes original generated game illustrations. It does not redistribute model weights or claim ownership of the upstream model/runtime. The reference runtime uses MIT No Attribution; its notice is included under `deployment/agentcore-source/LICENSE`. Preserve and review the Decider/model Apache-2.0 notices, dependency licenses, and model terms when rebuilding. Reference runtime packaging: https://github.com/Vivek0712/strands-decider-agentcore. Strands Decider: https://github.com/strands-labs/strands-decider.
+
+## Current release verification
+
+101 automated tests passed. Public deployment verified 41 static files byte-for-byte. One full public payroll operation used real Decider and Nova Lite and kept its milestone after reload. Three prepared contract fixtures also used the real API. Earlier local browser runs covered victory and defeat. These checks do not establish a human playtime benchmark, perfect model advice, or an enforceable hard credit cap.

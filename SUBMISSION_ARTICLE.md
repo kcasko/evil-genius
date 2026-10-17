@@ -6,7 +6,15 @@ In EVIL GENIUS, you run a villainous organization with a limited budget, a quest
 
 I built this browser game to explore a small but useful question: **could a decision model choose the right specialist for a mission without taking over the game?**
 
-[Play the game](https://d2gk454hfl6odl.cloudfront.net/) or [watch the 88-second demo](https://d2gk454hfl6odl.cloudfront.net/demo/evil-genius.mp4).
+[Play the game](https://d2gk454hfl6odl.cloudfront.net/) or [watch the updated demo](https://youtu.be/hlArbQHCHXE).
+
+## Earn your Moon shot
+
+The Moon is now the finale, not your first errand. Raid a rival's payroll, hijack a satellite uplink, and field-test a shrink ray before attempting the lunar heist. Between operations, expand the lair, research equipment, lower heat, and give exhausted crew a day off.
+
+There is one operation launch per game day. Crises have visible deadlines and real consequences. Broken equipment stops helping until repaired. Escape plans now favor different skills: science for a technical getaway, deception for a clever exit, and force for a loud one.
+
+Testing exposed a dull loop: a failed escape could send you back through work you had already completed. The current campaign keeps earned contract milestones, and completed failures provide a small, capped bonus on retries. Forfeiting does not earn that help. You can still lose the campaign, but a botched getaway does not erase a successful shrink-ray test.
 
 ## The scientist or the guy with the hammer?
 
@@ -28,23 +36,27 @@ Then Amazon Bedrock, using Nova Lite, gives the chosen character something to sa
 
 Each part has one job: **Decider chooses the specialist, the game resolves the consequences, and Bedrock supplies the commentary.** The mission report shows those parts separately so you can see what actually happened.
 
-## One real Moon heist
+## One real Moon heist, and the campaign around it
 
-In the recorded demo, Decider chose science, putting Dr. Malpractice's skills to work. The Breach succeeded, Nova Lite supplied his dialogue, and the mission eventually reached victory.
+The updated demo introduces the current campaign, then clearly labels an earlier live Moon-heist recording. In that recording, Decider chose science, putting Dr. Malpractice's skills to work. The Breach succeeded, Nova Lite supplied his dialogue, and the mission eventually reached victory.
 
-That was a real model response and a real game result. It was not a guaranteed win. In another live test, Decider answered successfully and the mission still failed its roll. The game paid out the appropriate partial reward and carried on.
+That was a real model response and a real game result. It was not a guaranteed win. In another live test, Decider answered successfully and the mission still failed its roll. The current campaign recovers the launch fee on a completed failure, without making failed missions profitable.
 
 That distinction is part of the fun. Getting advice does not mean the universe owes you a successful lunar robbery. The confidence shown beside a model choice is also separate from your chance of winning.
 
 ## What did not go smoothly
 
-Waiting was the biggest problem. In the demo, Decider took about 70 seconds to respond on my CPU deployment. Some warm test calls took about seven seconds, but startup could be much slower. The video clearly labels its shortened wait.
+Waiting was the biggest problem. In the demo, Decider took about 70 seconds to respond on my CPU deployment. In the latest three-contract integration check, the first call took about 73 seconds and the later calls took about 21-22 seconds. These are observations from this deployment, not a speed guarantee. The video clearly labels its shortened wait.
 
 That taught me something more useful than a flattering speed claim: a game needs to keep working when the model does not answer quickly, or cannot answer at all.
 
 EVIL GENIUS has a built-in backup choice and tells you when it is being used. Daily limits also keep public play from turning a fictional villain's spending problem into my actual AWS bill. When paid inference is unavailable, you can still play.
 
 I am not claiming this setup is faster or cheaper than another model. This experiment is about making one meaningful decision visible, useful, and contained.
+
+The latest release passed 101 automated checks. I also played browser runs that ended in both victory and heat defeat, and tested real decisions and narration for the new contracts. Scripted strategy tests helped expose long retry loops, but they are not a measure of human enjoyment or playtime.
+
+Another live test caught the narrator inventing a success percentage. The game had already fixed the result, but the line could still mislead a player. The frontend now suppresses numeric narration and always keeps the actual roll and rewards separate from the flavor dialogue. That check is useful, not a guarantee that every generated line will be perfect.
 
 ## Take the useful part home
 
@@ -58,7 +70,5 @@ The pattern demonstrated is **tool selection**: choosing among available special
 
 The experiment's lesson is simple: give the model a decision worth making, let the player see its consequences, and keep the rules in charge. If everything goes wrong, at least the accountant can explain why you cannot afford another Moon.
 
-*The live game has additional artwork added after the demo was recorded. The demonstrated decision workflow is unchanged.*
+*The demo combines a current campaign overview with clearly labeled earlier live decision footage. It is not a recording of a full current campaign. Older browser saves keep their original short-run rules; New Game starts the campaign.*
 
-
-Published article: https://builder.aws.com/content/3KnbpaYvMSHHRgLJsWOVOW6Dyc2/evil-genius-let-decider-choose-the-henchman
