@@ -1,69 +1,64 @@
-# EVIL GENIUS: let a small model choose the henchman, not rewrite the game
+# EVIL GENIUS: Let Decider Choose the Henchman
 
-Tags: `#strands-decider-2b` `#tool-selection`
+Stealing the Moon is an ambitious business plan. Keeping the people hired to steal it from bankrupting the operation is the real challenge.
 
-Live game: https://d2gk454hfl6odl.cloudfront.net/
+In EVIL GENIUS, you run a villainous organization with a limited budget, a questionable crew, and one very unreasonable goal. Build your secret lair, equip your henchmen, manage their stress, and launch a lunar heist. Meanwhile, bills keep coming and crises interrupt your carefully laid plans. World domination apparently involves a lot of management.
 
-Demo video: https://d2gk454hfl6odl.cloudfront.net/demo/evil-genius.mp4
+I built this browser game to explore a small but useful question: **could a decision model choose the right specialist for a mission without taking over the game?**
 
-Source repository: https://github.com/kcasko/evil-genius.
+[Play the game](https://d2gk454hfl6odl.cloudfront.net/) or [watch the 88-second demo](https://d2gk454hfl6odl.cloudfront.net/demo/evil-genius.mp4).
 
-EVIL GENIUS is a turn-based browser strategy game about an incompetent supervillain organization trying to steal the Moon. You build a lair, choose a crew, survive crises, and try to escape with enough Infamy to declare victory. The accountant is a playable specialist. The robot needs server upkeep. The brute treats most problems as construction opportunities.
+## The scientist or the guy with the hammer?
 
-The AI experiment is narrower than the premise: can a small decision model choose a useful specialist without becoming the authority over the game?
+Your crew has different specialties. Science, force, deception, and finance can all be useful, depending on the plan. The choice matters because each henchman brings different abilities, stress, and equipment to the mission.
 
-## One meaningful decision
+When the team reaches the Breach stage, the moment when the plan has to get past the obstacle, Strands Decider 2B gets a job:
 
-At the Breach stage, Strands Decider 2B chooses among the skills available in the player's actual mission roster: science, force, deception, or finance. The typed question is:
+> Given this plan, crew, and equipment, which available specialist action is most useful?
 
-> Choose the most useful specialist action for executing the fictional mission plan using these resources.
+It can choose only from the specialties you actually brought. It cannot summon an absent henchman or invent a new ability. Its choice determines which crew member's abilities affect the next roll.
 
-The state includes the mission plan, selected crew and equipment, heat, and recent events. The bridge removes unavailable options before building the question. The response contains a choice, a probability distribution, and confidence. Decider answers a typed question; it does not write the dialogue. [Strands Decider inference documentation](https://github.com/strands-labs/strands-decider/blob/main/docs/inference.md).
+Think of it as a mission adviser with a very short menu. Sometimes you need the scientist. Sometimes you need the hammer. Giving everyone a hammer would certainly simplify the meeting, but it would make the finance department considerably worse.
 
-This selection matters. The chosen skill maps to a member of the assigned crew. That specialist's competence, stress, and equipment synergy affect the Breach roll. A different choice can change the outcome. It is not a model label printed beside an otherwise unchanged result.
+## The model chooses. The game rolls the dice.
 
-The JavaScript engine resolves the roll and commits the state. Only afterward does Amazon Bedrock, using the `us.amazon.nova-lite-v1:0` inference profile, generate cosmetic dialogue for that specialist. Narration is escaped for display and never parsed as game instructions, rewards, or statistics.
+After Decider picks a specialist, the game's rules settle the outcome. The model cannot award itself a victory, rewrite your bank balance, or declare that the Moon was inside us all along.
 
-## The AWS path
+Then Amazon Bedrock, using Nova Lite, gives the chosen character something to say about what happened. That dialogue adds personality, but it cannot change the result.
 
-The public game is served through CloudFront from a private S3 bucket using Origin Access Control. CloudFront routes API requests to an AWS-IAM-authenticated Lambda Function URL. The bridge checks a DynamoDB kill switch and reserves both player and global quotas atomically before invoking paid services.
+Each part has one job: **Decider chooses the specialist, the game resolves the consequences, and Bedrock supplies the commentary.** The mission report shows those parts separately so you can see what actually happened.
 
-The specialist question goes to a CPU Bedrock AgentCore Runtime. This build pins `StrandsAgents/strands-decider-2B-hobson-v19` to revision `bb282d786bc251fd4e3068de3ada9ddbb38127cd`, using int8 quantization, the V1 runtime platform, a 300-second idle session timeout, and a 600-second maximum session lifetime. The deployment uses no EC2 instance, GPU, or provisioned model throughput.
+## One real Moon heist
 
-This is a bounded decision workflow, not a claim that an autonomous agent invents new tools. The live request path uses the bridge and the game engine. The repository also contains Strands SDK helper code, but the demo does not pretend that a free-running SDK planning loop controls gameplay.
+In the recorded demo, Decider chose science, putting Dr. Malpractice's skills to work. The Breach succeeded, Nova Lite supplied his dialogue, and the mission eventually reached victory.
 
-## What happened when I tested it
+That was a real model response and a real game result. It was not a guaranteed win. In another live test, Decider answered successfully and the mission still failed its roll. The game paid out the appropriate partial reward and carried on.
 
-The October 16 smoke-test records include a fresh-player decision request taking 83.266 seconds. Four warm samples had a median of 7.117 seconds and a p95 of 7.191 seconds. Those four samples are a small observation, not a service-level promise. Peak recorded runtime RSS was about 6.54 GB. Full initial model readiness took substantially longer than an individual decision request.
+That distinction is part of the fun. Getting advice does not mean the universe owes you a successful lunar robbery. The confidence shown beside a model choice is also separate from your chance of winning.
 
-A later end-to-end browser test returned a real Decider response in about 50.5 seconds and a Nova Lite narration in about 1.4 seconds. Decider selected science with confidence 0.269. The mission then failed its game roll, correctly awarded the partial payout, and displayed the narration. A successful API response is not a guaranteed successful heist.
+## What did not go smoothly
 
-Model confidence is also not the mission's win probability. The debrief now labels these separately: the selected specialist and model confidence, the actual game roll, and the Bedrock dialogue.
+Waiting was the biggest problem. In the demo, Decider took about 70 seconds to respond on my CPU deployment. Some warm test calls took about seven seconds, but startup could be much slower. The video clearly labels its shortened wait.
 
-The recorded demo makes one new real decision and one new narration request. With the reproducible seed `contest-demo-1`, Decider chose science with confidence 0.4029, Nova Lite returned character dialogue, and the mission reached victory. The reported model latency was 70.212 seconds; the combined browser Breach step took about 73.75 seconds. The video explicitly condenses the startup wait for readability, without replacing the responses or the game result.
+That taught me something more useful than a flattering speed claim: a game needs to keep working when the model does not answer quickly, or cannot answer at all.
 
-I have not measured a latency or cost improvement against an equivalent frontier-model router. The CPU deployment does not reproduce the upstream project's hardware benchmark. Final attributable AWS charges are delayed, so this article makes no finalized per-decision cost or savings claim.
+EVIL GENIUS has a built-in backup choice and tells you when it is being used. Daily limits also keep public play from turning a fictional villain's spending problem into my actual AWS bill. When paid inference is unavailable, you can still play.
 
-## Failure is part of the design
+I am not claiming this setup is faster or cheaper than another model. This experiment is about making one meaningful decision visible, useful, and contained.
 
-If a provider is unavailable, a daily quota is exhausted, or paid inference is disabled, the game continues with a deterministic specialist selection. The client labels the fallback instead of presenting it as a live model response.
+## Take the useful part home
 
-The public campaign permits 50 combined paid requests per day globally and 10 per player. A six-hour watchdog checks posted account usage across the campaign's month boundary and disables inference at the lower of the cumulative $5-per-elapsed-UTC-day allowance and $180. These controls use delayed billing data and are not a guaranteed hard spending cap. The campaign also has an expiry, budgets, and short log retention. Public static gameplay can continue when paid inference is off.
+The [public source](https://github.com/kcasko/evil-genius) includes a [reusable decision recipe](https://github.com/kcasko/evil-genius/tree/main/patterns/specialist-selection). It shows how to give Decider a clear question and a list of available actions, check its answer, and run only the selected action. Instructions, a no-network example, and tests are included.
 
-End-to-end checks covered both missions, saving and reloading, valid and malformed imports, construction, research, crew rest, crises, forfeit, victory, and defeat. Some error paths used browser-local simulations or prepared saves, explicitly separated from the real inference evidence. Sixty-six existing gameplay tests, five new save-validation tests, three availability-probe tests, and five standalone recipe tests passed.
+You could adapt that pattern to choosing a troubleshooting tool or routing work to an available specialist. Those are possible uses, not features claimed for this game.
 
-Testing found a save-import bug that could overwrite a working game before reporting an error. It also found that a rate-limit response left the badge saying LIVE. Both were fixed and retested. Neither is hidden behind a claim that a polished demo proves every possible game path.
+For builders who want the details: the game runs on AWS, with CloudFront and S3 serving the frontend, Lambda handling requests, Strands Decider 2B running on CPU in Bedrock AgentCore Runtime, and Amazon Bedrock Nova Lite generating dialogue. The repository documents the exact model version, measurements, safeguards, and deployment wiring.
 
-A cold bridge response also exposed an overly short browser health-probe window. The window is now ten seconds, with tests showing that a healthy response after 3.5 seconds is accepted and a stalled request still aborts into fallback.
+The pattern demonstrated is **tool selection**: choosing among available specialist actions. Submission tags: **#strands-decider-2b #tool-selection**.
 
-## Reuse the decision pattern
+The experiment's lesson is simple: give the model a decision worth making, let the player see its consequences, and keep the rules in charge. If everything goes wrong, at least the accountant can explain why you cannot afford another Moon.
 
-The source package includes `patterns/specialist-selection/`: a typed question builder, response validation, allowlisted action dispatch, a caller-supplied fallback, a recorded-response example, and tests. Its default command makes no network requests. An explicit endpoint option connects it to a running compatible local Decider server.
+*The live game has additional artwork added after the demo was recorded. The demonstrated decision workflow is unchanged.*
 
-Replace the four fictional specialties with your own authorized actions, offer only those currently available, validate the answer, and route it to a callable. Keep the application authoritative over state. The game-specific AWS adapter and browser-to-engine wiring are documented alongside the standalone example.
-
-The useful boundary was not between a game with AI and a game without it. It was the boundary around one decision: let the model choose the specialist, let the engine resolve the consequences, and let the narrator complain about the paperwork afterward.
-
-References: [Decider source and model](https://github.com/strands-labs/strands-decider), [AgentCore reference packaging](https://github.com/Vivek0712/strands-decider-agentcore), and [contest requirements](https://builder.aws.com/build/hackathons/4f50957c-1d08-37ab-b11c-97516b9adeb4/agent-experience-hackathon).
 
 Published article: https://builder.aws.com/content/3KnbpaYvMSHHRgLJsWOVOW6Dyc2/evil-genius-let-decider-choose-the-henchman
