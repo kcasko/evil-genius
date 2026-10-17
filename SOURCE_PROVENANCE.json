@@ -2,7 +2,7 @@
   "base_commit": "5c3af2c",
   "branch": "gameplay/progression",
   "deployed": false,
-  "notes": "Separate local campaign candidate. Original public release remains available. No paid inference used for candidate tests. Hashes describe archived Git blobs, independent of Windows checkout line endings.",
+  "notes": "Separate local campaign candidate. Original public release remains available. Six bounded live inference calls used for prepared candidate integration fixtures; see campaign-live-integration.md. Hashes describe archived Git blobs, independent of Windows checkout line endings.",
   "file_sha256": {
     ".gitignore": "b21b98ce1549b0907568b18f9739739eb2c030cb330bf68ff5a971abd5a0c778",
     "AGY_DESIGN_REPORT.md": "b3c67e54df81ca3fc9c524f6f2d0841025c4588dea8f8aa7038f4d97bbf5c3ef",
