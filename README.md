@@ -1,142 +1,66 @@
-# EVIL GENIUS: World Domination Pending
+# EVIL GENIUS V2
 
-Standalone browser game with three missions, four henchmen, and persistent offline progress. The original manual gameplay remains available.
+A turn-based villain management game with one bounded AI decision: **Strands Decider 2B selects the Breach specialist; the game engine resolves the consequences; Amazon Bedrock Nova Lite adds cosmetic dialogue.**
 
-## Play offline
+Live game: https://d2gk454hfl6odl.cloudfront.net/
 
-Open `index.html` in Chrome or Edge. Offline mode never calls AI and runs deterministic simulated outcomes.
+Contest pattern: **tool selection**. Tags: `#strands-decider-2b` and `#tool-selection`.
 
-Gameplay rules live in `game/engine.js`. The browser uses the same pure mission resolver and deterministic specialist fallback exercised by the Node test suite.
+## Start here
 
-## Run with live decision model + Bedrock
+- Play the live game and open its four-step guide.
+- Read `SUBMISSION_ARTICLE.md` for the architecture, measured behavior, limits, and lessons.
+- Reuse `patterns/specialist-selection/` for a standalone typed-choice -> allowlisted-action recipe.
+- Watch the [88-second live demo](https://d2gk454hfl6odl.cloudfront.net/demo/evil-genius.mp4). The explicitly labeled startup wait is condensed; model responses and gameplay are real.
 
-Requires Python 3.10+, AWS credentials configured with `bedrock:InvokeModel` permission, access to the configured Bedrock model, and the experimental Decider model weights (downloaded separately). Running Decider may use substantial CPU/GPU memory.
+## Run the static game locally
 
-```bash
-python -m pip install -r requirements.txt
-python -m pip install strands-decider
-strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
+From this directory:
+
+```text
+python -m http.server 8080 --bind 127.0.0.1
 ```
 
-In a second terminal:
+Open http://127.0.0.1:8080/. The static server has no AI endpoints, so the health probe fails and the game uses deterministic fallback. This command does not create AWS resources, download a model, or invoke paid inference.
 
-```bash
-export AWS_REGION=us-east-1
-export BEDROCK_MODEL_ID=us.amazon.nova-lite-v1:0
-export STRANDS_DECIDER_URL=http://127.0.0.1:8099
-python backend/server.py
+## Try the reusable decision recipe
+
+```text
+python patterns/specialist-selection/specialist_selection.py
+python -m unittest discover -s patterns/specialist-selection -p "test_*.py" -v
+node scripts/verify-contest.mjs
 ```
 
-`requirements.txt` also installs `strands-agents` (the Strands Agents SDK),
-which `backend/agent.py` uses to build a real `Agent` backed by `BedrockModel`.
+The default recipe uses an explicitly labeled recorded bridge response. A live local endpoint is opt-in; its README explains how to supply one. The recipe validates availability, confidence, and probabilities, routes only to allowlisted functions, and uses the caller's fallback on bad responses or upstream failure.
 
-Open `http://127.0.0.1:8787`. The server binds to loopback only. **Do not expose the server publicly**: it has no authentication, quota enforcement, rate limiting, or permission boundaries. Before AWS deployment, replace this server with authenticated, rate-limited cloud endpoints.
+## What runs on AWS
 
-**UNVERIFIED:** live inference (a real strands-decider server plus real AWS
-credentials actually answering a request) has not been run end-to-end by a
-human in this environment. Everything in `backend/agent.py` is covered only
-by mock-based tests (see `backend/tests/`, which never touch the network);
-treat live behavior as unverified until someone runs it with real Decider
-weights and AWS credentials. This hedge comes off once
-`backend/tests/fixtures/live_decider_response.json` and
-`live_bedrock_response.json` exist as real captured responses (see below).
-
-### Verifying live inference
-
-`backend/scripts/verify_live.py` is the diagnostic script for this. It is
-never run automatically (not by the test suite, not in CI) because it makes
-real network calls. Run it yourself once Decider is serving and AWS
-credentials are configured:
-
-```bash
-# Dependency/reachability check only -- no Bedrock or Decider inference
-# call, safe to run anytime (including CI):
-python backend/scripts/verify_live.py --dry-run
-
-# Full live run: hits the real /v1/systemone endpoint and real Bedrock
-# converse() once each, prints every raw response, and writes
-# backend/tests/fixtures/live_decider_response.json and
-# live_bedrock_response.json for you to commit as golden fixtures:
-python backend/scripts/verify_live.py
+```text
+Browser -> CloudFront -> private S3 static assets
+                    -> AWS_IAM Lambda bridge
+                         -> DynamoDB kill switch + atomic daily quotas
+                         -> AgentCore CPU runtime / pinned int8 Decider v19
+                         -> Amazon Bedrock / Nova Lite narration
 ```
 
-Use the captured `live_decider_response.json` to resolve the
-`# TODO: verify against installed version` marker in
-`backend/agent.py::validate_decider_response`, then add a golden-response
-unit test under `backend/tests/` built from that fixture so a future schema
-regression breaks CI.
+The selected crew limits the options submitted to Decider. `game/v2/engine.js:resolveBreach` maps its skill choice to a crew member and applies that specialist's game modifiers. The decision debrief labels the actual selected character and model confidence. Model confidence is not the mission win probability.
 
-## Strands Agent: specialist tool selection + narration
+The game stays playable when paid inference is disabled. The browser applies no model-generated arithmetic. Narration is escaped and cannot alter the saved state. The deployed path is a bounded bridge-and-engine workflow; the presence of Strands SDK helper code does not imply that a free-running SDK agent controls the game.
 
-`backend/agent.py` builds a Strands Agents SDK `Agent` (model: Amazon Bedrock
-via `BedrockModel`, default `BEDROCK_MODEL_ID=us.amazon.nova-lite-v1:0`) with
-two `@tool`-decorated tools, both idempotent and side-effect-free with
-respect to game state:
+## Source provenance and deployment
 
-- `choose_specialist(state)` calls the local strands-decider `/v1/systemone`
-  endpoint for a typed `choice` decision between `science`, `force`,
-  `deception`, `finance`, then validates the response: `choice` must be one
-  of the tools offered, `confidence` (if present) must be a float in
-  `[0, 1]`, and every key in `probabilities` (if present) must be an offered
-  tool mapped to a float in `[0, 1]`.
-- `narrate_outcome(state)` calls Bedrock's Converse API for two sentences of
-  cosmetic supervillain dialogue. Cosmetic only: it cannot and does not
-  change game arithmetic. The prompt (`agent.build_narration_prompt`) is
-  hardened per `GAME_VISION.md` §3: exactly two sentences, no markdown/lists,
-  explicit fictional-comedy framing, the correct per-character voice tag
-  (`mal` / `boris` / `chaos` / `kevin` / `dolores`, with a neutral fallback
-  voice for any other id), and a ban on modern-world brands, celebrities,
-  politicians, and references to our inspiration TV shows (The Office, Parks
-  and Recreation, Silicon Valley, Scrubs, Arrested Development, Brooklyn
-  Nine-Nine, Futurama) -- per §3, the game studies the comedic *technique* of
-  those shows, it never references or copies them. `agent.postprocess_narration`
-  then strips a leading markdown fence or role prefix, truncates to 500 chars,
-  and falls back to a fixed, non-Bedrock line if a banned reference slips
-  through anyway.
+This candidate starts from immutable release `4744f50f2b48a13c29833abbe099099b5f8792d8` and includes the later reviewed deployment overlays, save fixes, tutorial, artwork, portraits, and debrief. `SOURCE_PROVENANCE.json` records file hashes and comparisons with the served asset set. The original checkout was left unchanged.
 
-A `DeciderValidationHandler` (a Strands intervention / `before_tool_call`
-handler) denies a `choose_specialist` call before it runs if its
-`available_tools` argument is missing or empty.
+The CloudFormation templates are the campaign's source, not an instruction to deploy into the original account. Review names, artifact paths, IAM, alerts, expiry, quotas, runtime settings, and cleanup before using them in another environment. They can incur charges. No deployment runs when this archive is opened or when the local examples above are executed.
 
-Both tools raise a dedicated error type (`DeciderUnavailableError` /
-`BedrockUnavailableError`) when the upstream service is unreachable or
-returns a response that can't be parsed, as opposed to a plain `ValueError`
-for an actual bad/invalid decision. `backend/server.py` maps the former to a
-sanitized HTTP 503 and the latter to a 400; neither ever forwards a stack
-trace, credential detail, AWS region, or ARN to the HTTP client -- those only
-get printed to the server's own stdout for a human to read locally.
+`deployment/bridge-source/` contains the Python source files taken from the deployed Lambda bundle, excluding third-party dependencies. `deployment/agentcore-source/` contains the packaged runtime source, excluding model weights. Rebuild dependencies from their manifests; do not treat the archive as a prebuilt Lambda ZIP or container image. The pinned runtime upstream revision and model revision are documented under `infra/agentcore/` and in the article.
 
-`backend/server.py` imports `agent.call_decider` / `agent.call_bedrock_narration`
-as `choose_tool` / `narrate` (kept importable under their original names for
-`tests/test_bridge.py`) to serve `/api/decide` and `/api/narrate`.
-`agent.run_mission_turn(state)` is a single callable that runs both tools in
-sequence (decide, then narrate with the chosen specialist as `henchman`) for
-callers that want a full mission turn in one call. The decision is checked
-against allowed options and passed to the actual game engine. If a different
-specialist is chosen, that specialist acts, gains/loses loyalty, and the
-mission gets a coordination penalty. On service error, the game falls back
-to offline play.
+The campaign config uses 50 combined paid calls/day globally, 10 per player, a 300-second idle session timeout, a 600-second maximum session lifetime, a six-hour spending watchdog, and inference expiry after the judging window. Billing is delayed; these are protective controls, not a guaranteed hard credit cap. This repository makes no measured cost-savings or 115-ms CPU inference claim.
 
-**Important:** request/response field names for strands-decider's
-`/v1/systemone` and for the Strands Agents SDK's `Agent` / `@tool` /
-intervention APIs were checked against the installed `strands-decider` docs
-and the installed `strands-agents` package source, except where marked
-`# TODO: verify against installed version` in `backend/agent.py` (a live
-JSON example of a strands-decider `choice` answer, as opposed to its `noul`
-answer, was not found). The project does not yet include AWS deployment, a
-public repository, Builder Center article, or video, so it is not a
-qualified submission yet.
+## Historical notes
 
-## Verify
+Earlier design reports, deployment plans, and preflight drafts are preserved for provenance. They may describe superseded EC2/GPU proposals, private-test teardown plans, old quotas, or unverified pre-deployment status. Use this README, `SUBMISSION_ARTICLE.md`, current source/templates, and the dated verification evidence for the final implementation. Neither outdated prose nor a past estimate is evidence of the live deployment's present state.
 
-```bash
-python -m py_compile backend/server.py backend/agent.py backend/scripts/verify_live.py
-python -m unittest discover -s tests -v
-python -m unittest discover -s backend/tests -v
-node --test tests/*.test.mjs
-python backend/scripts/verify_live.py --dry-run
-```
+## Credits and license
 
-## Contest tags
-
-`#strands-decider-2b` and `#tool-selection`.
+Project source is under the included MIT license. The source package includes original generated game illustrations. It does not redistribute model weights or claim ownership of the upstream model/runtime. The reference runtime uses MIT No Attribution; its notice is included under `deployment/agentcore-source/LICENSE`. Preserve and review the Decider/model Apache-2.0 notices, dependency licenses, and model terms when rebuilding. Reference runtime packaging: https://github.com/Vivek0712/strands-decider-agentcore. Strands Decider: https://github.com/strands-labs/strands-decider.

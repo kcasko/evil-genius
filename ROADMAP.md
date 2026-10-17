@@ -15,14 +15,21 @@ Hard gate: nothing from M1+ ships until every item here is done or
 explicitly cut by the human.
 
 ### 0.1 Verification of what's already built
-- [x] Three missions, four specialists, offline engine extracted — on `codex/gameplay`.
-- [x] Strands Agent + Bedrock + Decider plumbing, 37 passing tests — on `claude/aws-agent`.
-- [ ] (H) Resolve `README.md` merge conflict between `codex/gameplay` and `claude/aws-agent`, then merge both to `main`.
+- [x] Three missions, four specialists, offline engine extracted and merged to `main`.
+- [x] Strands Agent + Bedrock + Decider plumbing merged to `main`.
+- [x] Full automated suite green on merged `main` (145 tests).
 
-### 0.2 Live inference verification (BLOCKS submission)
-- [ ] (H) Install Decider weights locally: `strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099`.
-- [ ] (H) Configure real AWS creds with `bedrock:InvokeModel` for `us.amazon.nova-lite-v1:0`.
-- [ ] (H) Run `python backend/server.py`, trigger one real `/api/decide` and one real `/api/narrate` from the browser, capture the raw JSON of each.
+### 0.2 AWS-hosted live inference verification (BLOCKS submission)
+Architecture and cost/security decisions are documented in `AWS_DEPLOYMENT_PLAN_V2.md`; the next execution gate is `AWS_PRIVATE_SMOKE_TEST.md`.
+Planning is approved, but no quota change, paid inference, model download, deployment, or resource creation is authorized yet. Private V2 validation takes priority over 0.3 and 0.4.
+
+- [x] (H) Approve `us-east-1` planning for the cost-optimized V2 path with a $5 initial testing target. This does not authorize resource creation; GPU EC2, always-on compute, and provisioned throughput are excluded.
+- [x] (K) Verify the V2 offline candidate: 145 tests, `cfn-lint`, and read-only CloudFormation validation pass; Nova Lite profile and immutable model identifiers are documented.
+- [ ] (H) At the next authorization gate, approve or reject the exact V2 resource list, expected charges, idle-billing behavior, and teardown plan.
+- [x] (K) Add production configuration, strict API limits, health/readiness, visible Decider choice/confidence/probabilities, bounded fallback, and service-worker coverage without changing offline game arithmetic.
+- [x] (K) Add reviewed infrastructure-as-code for AgentCore scale-to-zero, private S3 + CloudFront/OAC, least-privilege IAM, edge abuse controls, cost alerts/watchdog, and kill-switch procedures. Nothing has been deployed.
+- [ ] (H + K) After separate resource-creation approval and no earlier than October 16, run a private test of 5 decisions, expanding to at most 10 only if configuration and meters remain expected; run at most 5 Nova Lite calls and capture raw schemas.
+- [ ] (K) Record cold/warm latency, peak memory, 300-second idle transition, actual incremental cost, and unexpected billable resources. Stop and seek approval on anomalies; no GPU fallback is authorized.
 - [ ] (K) Use the captured `ChoiceAnswer` JSON to resolve every `# TODO: verify against installed version` marker in `backend/agent.py`; strip the "UNVERIFIED" hedge from `README.md`.
 - [ ] (K) Add one golden-response unit test under `backend/tests/` built from the real captured Decider response (so a schema regression breaks CI).
 
@@ -37,11 +44,11 @@ explicitly cut by the human.
 - [ ] (K) Pass over the Bedrock narration system prompt in `backend/agent.py` so it enforces: two sentences, no modern-world brand/celeb/politics/TV-show references, fictional comedy framing explicit, character voice tag honored.
 
 ### 0.5 Submission artifacts
-- [ ] (H) Push `main` to `kcasko/evil-genius` on GitHub (public).
-- [ ] (H + K) Stand up a minimal authenticated AWS-hosted path (Lambda + API Gateway or App Runner) wrapping the Strands Agent. `backend/server.py` is explicitly loopback-only and does NOT get exposed as-is.
-- [ ] (H) Write Builder Center article: architecture, Decider rationale, Bedrock Converse usage, hackathon fit.
-- [ ] (H) Record short demo video showing one real mission turn: Decider choice visible, Bedrock narration visible, offline fallback demonstrated.
-- [ ] (H) Submit.
+- [x] (H) Push merged `main` to `kcasko/evil-genius` on GitHub (public).
+- [ ] (H + K) After explicit resource-creation approval, execute the private AgentCore V2 smoke test documented in `AWS_PRIVATE_SMOKE_TEST.md`; do not deploy GPU EC2.
+- [~] (H) Finalize the prepared Builder Center article after measured private results replace every `[NOT MEASURED]` field.
+- [ ] (H) Record a short demo showing one authorized AWS-hosted mission turn, Bedrock narration, and offline fallback without implying public launch.
+- [ ] (H) Execute and verify the documented shutdown procedure, then submit.
 
 ### 0.6 Exit criteria for M0
 All of 0.1 – 0.5 complete. Live inference proven by captured responses, not by claims. Offline play still works. Tests still green.

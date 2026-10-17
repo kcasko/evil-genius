@@ -1,0 +1,183 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  EVIL GENIUS V2 -- Lambda bridge stack (20): backend/bridge/handler.py as
+  an ARM Lambda behind a Function URL, with a scoped execution role
+  (mirrors infra/iam/bridge-role.json). Deploy after 00-core.yaml.
+  IMPORTANT DEPLOY-ORDER NOTE: despite the 00/10/20/30 filename prefixes
+  implying a strictly ascending deploy order, this stack must be deployed
+  BEFORE 10-storage-edge.yaml, because CloudFront's /api/* custom origin
+  (10-storage-edge.yaml) needs this stack's BridgeFunctionUrlDomain
+  output. Real order: 00 -> 20 -> 10 -> 30. See
+  docs/V2_IMPLEMENTATION_NOTES.md. Preparation only -- not deployed under
+  the 2026-10-16 freeze.
+
+Parameters:
+  CoreStackName:
+    Type: String
+    Default: eg-v2-core
+    Description: Stack name used to deploy 00-core.yaml, for Fn::ImportValue lookups.
+  AgentRuntimeArn:
+    Type: String
+    Description: >-
+      The ${AGENT_RUNTIME_ARN} placeholder: the AgentCore Runtime ARN for
+      the 'evilgenius' decider, known only after infra/agentcore's
+      deciderctl/agentcore deploy step. No default -- must be supplied at
+      deploy time, never committed.
+    AllowedPattern: '.+'
+  BridgeCodeS3Bucket:
+    Type: String
+    Description: S3 bucket holding the packaged backend/bridge/ Lambda deployment artifact.
+  BridgeCodeS3Key:
+    Type: String
+    Default: bridge/campaign-v2.zip
+  CloudFrontDistributionArn:
+    Type: String
+    Default: ''
+    Description: >-
+      Leave blank on the first deploy. After 10-storage-edge.yaml creates
+      the CloudFront distribution, update this stack with its ARN to grant
+      only that distribution permission through CloudFront OAC. The
+      function URL remains AWS_IAM-authenticated throughout; there is no
+      public bootstrap window.
+  PlayerDailyLimit:
+    Type: Number
+    Default: 10
+  GlobalDailyLimit:
+    Type: Number
+    Default: 50
+  KillswitchCacheSeconds:
+    Type: Number
+    Default: 60
+  BedrockModelId:
+    Type: String
+    Default: us.amazon.nova-lite-v1:0
+    AllowedValues:
+      - us.amazon.nova-lite-v1:0
+    Description: Approved Nova Lite US geo inference profile; change requires a reviewed IAM and cost update.
+
+Conditions:
+  RestrictToCloudFront: !Not [!Equals [!Ref CloudFrontDistributionArn, '']]
+
+Resources:
+  BridgeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eg-v2-bridge-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: eg-v2-bridge-policy
+          # Mirrors infra/iam/bridge-role.json -- keep the two in sync.
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: InvokeOneAgentCoreRuntime
+                Effect: Allow
+                Action: bedrock-agentcore:InvokeAgentRuntime
+                Resource:
+                  - !Ref AgentRuntimeArn
+                  - !Sub '${AgentRuntimeArn}/runtime-endpoint/DEFAULT'
+              - Sid: InvokeNovaLiteThroughApprovedProfile
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:us-east-1:${AWS::AccountId}:inference-profile/us.amazon.nova-lite-v1:0'
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-lite-v1:0'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-lite-v1:0'
+              - Sid: RateLimitAndKillSwitchTableAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !ImportValue
+                  Fn::Sub: '${CoreStackName}-RateLimitTableArn'
+              - Sid: WriteOwnLogGroupOnly
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/eg-v2-bridge:*'
+
+  BridgeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: eg-v2-bridge
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: handler.lambda_handler
+      Code:
+        S3Bucket: !Ref BridgeCodeS3Bucket
+        S3Key: !Ref BridgeCodeS3Key
+      MemorySize: 256
+      # First AgentCore cold start is measured at 45-90 seconds. Keep the
+      # bridge above that envelope; CloudFront's origin read-timeout must be
+      # raised to match before deployment.
+      Timeout: 120
+      Role: !GetAtt BridgeExecutionRole.Arn
+      Environment:
+        Variables:
+          # AWS_REGION is reserved by the Lambda runtime and set
+          # automatically -- it must NOT appear here.
+          RATELIMIT_TABLE_NAME: !ImportValue
+            Fn::Sub: '${CoreStackName}-RateLimitTableName'
+          AGENT_RUNTIME_ARN: !Ref AgentRuntimeArn
+          AWS_MAX_ATTEMPTS: "1"
+          AWS_RETRY_MODE: standard
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          PLAYER_DAILY_LIMIT: !Ref PlayerDailyLimit
+          GLOBAL_DAILY_LIMIT: !Ref GlobalDailyLimit
+          KILLSWITCH_CACHE_SECONDS: !Ref KillswitchCacheSeconds
+      Tags:
+        - Key: Project
+          Value: evil-genius
+
+  BridgeFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt BridgeFunction.Arn
+      AuthType: AWS_IAM
+
+  # Both permissions are required for AWS_IAM function URLs created after
+  # October 2025. They are absent on the first deploy, so the URL is never
+  # publicly invokable during the two-phase CloudFront bootstrap.
+  BridgeFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Condition: RestrictToCloudFront
+    Properties:
+      FunctionName: !Ref BridgeFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: cloudfront.amazonaws.com
+      FunctionUrlAuthType: AWS_IAM
+      SourceArn: !Ref CloudFrontDistributionArn
+
+  BridgeFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Condition: RestrictToCloudFront
+    Properties:
+      FunctionName: !Ref BridgeFunction
+      Action: lambda:InvokeFunction
+      Principal: cloudfront.amazonaws.com
+      InvokedViaFunctionUrl: true
+      SourceArn: !Ref CloudFrontDistributionArn
+
+Outputs:
+  BridgeFunctionArn:
+    Value: !GetAtt BridgeFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BridgeFunctionArn'
+  BridgeFunctionUrl:
+    Value: !GetAtt BridgeFunctionUrl.FunctionUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-BridgeFunctionUrl'
+  BridgeFunctionUrlDomain:
+    Description: Hostname only (no scheme/trailing slash) -- feed this to 10-storage-edge.yaml's BridgeOriginDomain parameter.
+    Value: !Select [2, !Split ['/', !GetAtt BridgeFunctionUrl.FunctionUrl]]
+    Export:
+      Name: !Sub '${AWS::StackName}-BridgeFunctionUrlDomain'

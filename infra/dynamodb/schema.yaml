@@ -1,0 +1,69 @@
+# Schema reference for the eg-ai-ratelimit DynamoDB table.
+#
+# This is the source of truth for the table's key, billing, TTL, and encryption
+# shape; infra/cfn/00-core.yaml's AWS::DynamoDB::Table resource must match those
+# properties. Stack-specific tags may differ. The
+# backend/bridge/{ratelimit,killswitch}.py item shapes are
+# written against it. On-demand (PAY_PER_REQUEST) billing: traffic at this
+# game's scale is bursty and low-volume (AWS_DEPLOYMENT_PLAN_V2.md §4 prices
+# it at ~$0.03/10k decisions), so provisioned capacity would need constant
+# tuning for no benefit.
+#
+# Key schema:
+#   pk  (S) -- partition key. One of three shapes, all hash-partitioned by
+#              this single string (no GSI needed -- every read/write in
+#              backend/bridge/ knows the exact pk+sk up front):
+#              - player#<uuid>#day#<yyyymmdd>  (per-player daily counter)
+#              - global#day#<yyyymmdd>          (account-wide daily counter)
+#              - ai_enabled                      (the kill-switch singleton)
+#   sk  (S) -- sort key. 'count' for both counter item shapes, 'flag' for
+#              the kill-switch item. Reserved so a future item type (e.g. a
+#              per-player audit log) can share a pk without colliding.
+#
+# TTL attribute: ttl (N, epoch seconds). Set only on the two counter item
+# shapes, to the next UTC midnight after the item is first written
+# (backend/bridge/ratelimit.py:_day_end_ttl) -- DynamoDB reclaims each
+# day's counters automatically, so there is no cleanup job to run or
+# forget. The kill-switch item has no TTL: it must persist until a human
+# or the cost watchdog explicitly changes it.
+#
+# Item shapes:
+#   {pk: "player#<uuid>#day#<yyyymmdd>", sk: "count", cnt: N, ttl: N}
+#   {pk: "global#day#<yyyymmdd>",         sk: "count", cnt: N, ttl: N}
+#   {pk: "ai_enabled",                    sk: "flag",  enabled: BOOL, deadline_ms: N (optional)}
+#
+# The attribute name is `cnt`, not `count` -- DynamoDB reserves the
+# keyword COUNT and rejects it unescaped in UpdateExpression/ConditionExpression.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Reference AWS::DynamoDB::Table resource for eg-ai-ratelimit. Copied
+  verbatim into infra/cfn/00-core.yaml; not deployed standalone.
+
+Resources:
+  RateLimitTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: eg-ai-ratelimit
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Project
+          Value: evil-genius
+        - Key: Environment
+          Value: v2-agentcore

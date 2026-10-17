@@ -1,0 +1,292 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  EVIL GENIUS V2 -- static site + edge stack (10): private S3 bucket with
+  OAC, CloudFront distribution (/api/* routed to the Lambda bridge
+  Function URL), WAFv2 Web ACL, and an inline static /kill operator-status
+  page. The page does not change server state; the real kill-switch controls
+  are the DynamoDB scripts/watchdog and IAM isolation procedures.
+  DEPLOY-ORDER NOTE: despite the filename prefix, this stack must be
+  deployed AFTER 20-bridge.yaml -- it needs that stack's
+  BridgeFunctionUrlDomain output as the BridgeOriginDomain parameter.
+  Real order: 00 -> 20 -> 10 -> 30. Preparation only -- not deployed under
+  the 2026-10-16 freeze.
+
+Parameters:
+  BridgeOriginDomain:
+    Type: String
+    Description: >-
+      20-bridge.yaml's BridgeFunctionUrlDomain output (hostname only, no
+      scheme/trailing slash), e.g. abc123xyz.lambda-url.us-east-1.on.aws.
+    AllowedPattern: '.+'
+  RateLimitExceededPerFiveMinutes:
+    Type: Number
+    Default: 100
+    Description: WAFv2 rate-based rule threshold on /api/* per IP (AWS_DEPLOYMENT_CHECKLIST.md §8 abuse-protection policy).
+
+Resources:
+  StaticSiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: evil-genius
+
+  StaticSiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticSiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontOACRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${StaticSiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution.Id}'
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub 'eg-v2-s3-oac-${AWS::StackName}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  LambdaOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub 'eg-v2-lambda-oac-${AWS::StackName}'
+        OriginAccessControlOriginType: lambda
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # --- Operator status page -------------------------------------------------
+  # A static /kill page served from S3 behind CloudFront's default (static)
+  # behavior, independent of the Lambda bridge. It is informational only and
+  # cannot disable AI: it has no secrets, API calls, or server-side logic once
+  # it is in the bucket. The actual kill-switch paths are documented in
+  # AWS_DEPLOYMENT_PLAN_V2.md.
+  # CloudFormation has no native "S3 object" resource type, so this is a
+  # small Lambda-backed custom resource that performs one s3:PutObject
+  # (and one best-effort s3:DeleteObject on stack deletion) -- the
+  # standard pattern for "render an inline file into S3 from a CFN
+  # template" (AWS CDK's BucketDeployment construct does the same thing
+  # under the hood, just not available in plain CFN).
+  KillPageWriterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: eg-v2-killpage-writer-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteOnlyTheKillPageObject
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${StaticSiteBucket.Arn}/kill/index.html'
+              - Sid: WriteOwnLogGroupOnly
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/eg-v2-killpage-writer:*'
+
+  KillPageWriterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: eg-v2-killpage-writer
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt KillPageWriterRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import urllib.request
+          import boto3
+
+          def handler(event, context):
+              status, reason = 'SUCCESS', ''
+              try:
+                  props = event['ResourceProperties']
+                  s3 = boto3.client('s3')
+                  if event['RequestType'] in ('Create', 'Update'):
+                      s3.put_object(
+                          Bucket=props['BucketName'],
+                          Key=props['ObjectKey'],
+                          Body=props['HtmlContent'].encode('utf-8'),
+                          ContentType='text/html; charset=utf-8',
+                      )
+                  elif event['RequestType'] == 'Delete':
+                      try:
+                          s3.delete_object(Bucket=props['BucketName'], Key=props['ObjectKey'])
+                      except Exception:
+                          pass  # best-effort: never block stack deletion on this
+              except Exception as exc:
+                  status, reason = 'FAILED', str(exc)[:256]
+              body = json.dumps({
+                  'Status': status,
+                  'Reason': reason or f"See CloudWatch Logs: {context.log_stream_name}",
+                  'PhysicalResourceId': event.get('PhysicalResourceId') or f"{event['LogicalResourceId']}-killpage",
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+              }).encode('utf-8')
+              req = urllib.request.Request(url=event['ResponseURL'], data=body, method='PUT',
+                                           headers={'Content-Type': '', 'Content-Length': str(len(body))})
+              urllib.request.urlopen(req)
+
+  KillPageObject:
+    Type: Custom::KillPage
+    Properties:
+      ServiceToken: !GetAtt KillPageWriterFunction.Arn
+      BucketName: !Ref StaticSiteBucket
+      ObjectKey: kill/index.html
+      HtmlContent: >-
+        <!doctype html><html><head><meta charset="utf-8"><title>EVIL
+        GENIUS -- Service Status</title></head><body
+        style="font-family:monospace;background:#111;color:#0f0;padding:2rem">
+        <h1>EVIL GENIUS INCORPORATED</h1><p>The AI specialist line is
+        intentionally offline right now.</p><p>The game itself is
+        unaffected -- Evil Genius Incorporated continues to run in fully
+        deterministic (non-AI) mode.</p></body></html>
+
+  ApiRateLimitWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub 'eg-v2-webacl-${AWS::StackName}'
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: eg-v2-webacl
+      Rules:
+        - Name: AWSManagedCommonThreatProtection
+          Priority: 0
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: eg-v2-common-rules
+        - Name: ApiRateLimitPerIp
+          Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: !Ref RateLimitExceededPerFiveMinutes
+              AggregateKeyType: IP
+              ScopeDownStatement:
+                ByteMatchStatement:
+                  SearchString: /api/
+                  FieldToMatch:
+                    UriPath: {}
+                  TextTransformations:
+                    - Priority: 0
+                      Type: NONE
+                  PositionalConstraint: STARTS_WITH
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: eg-v2-api-rate-limit
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2
+        DefaultRootObject: index.html
+        WebACLId: !GetAtt ApiRateLimitWebAcl.Arn
+        Origins:
+          - Id: StaticSiteOrigin
+            DomainName: !GetAtt StaticSiteBucket.RegionalDomainName
+            OriginAccessControlId: !Ref OriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+          - Id: BridgeApiOrigin
+            DomainName: !Ref BridgeOriginDomain
+            OriginAccessControlId: !Ref LambdaOriginAccessControl
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              # AgentCore cold starts are measured at 45-90 seconds. The
+              # account's CloudFront response-timeout quota must allow 120
+              # seconds before this template is deployed.
+              OriginReadTimeout: 120
+        DefaultCacheBehavior:
+          TargetOriginId: StaticSiteOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          # Managed policy id for CachingOptimized.
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: BridgeApiOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            # Managed policy id for CachingDisabled -- /api/* responses and
+            # errors are never cached (AWS_DEPLOYMENT_CHECKLIST.md §8).
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            # Managed origin-request policy id for AllViewerExceptHostHeader.
+            # Lambda function URLs require their origin host, not the viewer
+            # Host header. POST bodies must include x-amz-content-sha256 for
+            # CloudFront OAC signing.
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+      Tags:
+        - Key: Project
+          Value: evil-genius
+
+Outputs:
+  StaticSiteBucketName:
+    Value: !Ref StaticSiteBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-StaticSiteBucketName'
+  CloudFrontDistributionId:
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDistributionId'
+  CloudFrontDistributionArn:
+    Value: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution.Id}'
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDistributionArn'
+  CloudFrontDomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDomainName'
+  KillPageUrl:
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}/kill/index.html'

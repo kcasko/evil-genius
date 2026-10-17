@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  EVIL GENIUS V2 -- core stack (00): SNS budget topic and DynamoDB
+  rate-limit/kill-switch table. Uses the AWS managed `aws/dynamodb` key to
+  avoid the recurring customer-managed KMS key charge. Deploy first;
+  10-storage-edge.yaml, 20-bridge.yaml, and 30-ops.yaml all import this
+  stack's exports. Preparation only -- not deployed under the 2026-10-16
+  freeze (CLAUDE_V2_BRIEF.md).
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional email address subscribed to the budget-alert SNS topic.
+      Leave blank to create the topic without a subscriber (subscribe
+      manually later); notifications only, never a hard spend cap.
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
+
+Resources:
+  BudgetAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-budget-alerts'
+
+  BudgetPublishPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref BudgetAlertTopic]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: budgets.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref BudgetAlertTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnEquals:
+                aws:SourceArn: !Sub 'arn:aws:budgets::${AWS::AccountId}:budget/eg-v2-campaign-eg-v2-ops'
+  BudgetAlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref BudgetAlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # Mirrors infra/dynamodb/schema.yaml -- keep the two in sync.
+  RateLimitTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: eg-ai-ratelimit
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Project
+          Value: evil-genius
+
+Outputs:
+  BudgetAlertTopicArn:
+    Value: !Ref BudgetAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-BudgetAlertTopicArn'
+  RateLimitTableName:
+    Value: !Ref RateLimitTable
+    Export:
+      Name: !Sub '${AWS::StackName}-RateLimitTableName'
+  RateLimitTableArn:
+    Value: !GetAtt RateLimitTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RateLimitTableArn'

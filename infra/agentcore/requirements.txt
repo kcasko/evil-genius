@@ -1,0 +1,21 @@
+# Mirrors Vivek0712/strands-decider-agentcore's runtime/requirements.txt at
+# the pinned commit f9691ee9b2891ecb72308377947e4d655f07bde5 (verified
+# 2026-10-14). torch is pinned separately in the Dockerfile (CPU wheel,
+# ARG TORCH_VERSION) so it is NOT repeated here -- a second unconstrained
+# torch resolution here would risk silently pulling a CUDA build into a
+# CPU-only Graviton2 image. strands-decider itself is installed in the
+# Dockerfile via a pinned `git+https://` ref, not from this file, because
+# PyPI's `strands-decider` release (0.1.0) predates the current inference
+# code (AWS_DEPLOYMENT_CHECKLIST.md §6).
+#
+# NOT YET FROZEN: "frozen hashes" (pip-compile --generate-hashes / pip
+# download --no-binary) requires resolving the full transitive closure
+# (transformers, peft, and whatever strands-decider's own pinned commit
+# depends on) against a real package index at fork time -- doing that
+# speculatively here, without actually forking the repo, would produce
+# hashes that may not match the real resolve on deploy day. This is a
+# deploy-day step (AWS_DEPLOYMENT_PLAN_V2.md §9 step 1), not a step this
+# offline-only preparation task can safely fabricate. See
+# docs/V2_IMPLEMENTATION_NOTES.md open questions.
+bedrock-agentcore>=1.18.1
+huggingface_hub>=0.24

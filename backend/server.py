@@ -38,14 +38,31 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path in ('/','/index.html'):
+        path=self.path.split('?',1)[0]
+        if path in ('/','/index.html'):
             data=(ROOT/'index.html').read_bytes()
             self.send_response(200)
             self.send_header('Content-Type','text/html; charset=utf-8')
             self.send_header('Content-Length',str(len(data)))
             self.end_headers()
             self.wfile.write(data)
-        elif self.path=='/api/health':self.respond(200,{'status':'ok','decider_url':DECIDER_URL,'bedrock_model':MODEL_ID})
+        elif path=='/api/health':self.respond(200,{'status':'ok','decider_url':DECIDER_URL,'bedrock_model':MODEL_ID})
+        elif path.startswith('/game/') and path.endswith('.js') and '..' not in path:
+            # Serve the game/*.js browser modules alongside index.html so the
+            # same backend origin covers both static assets and /api/* calls.
+            try:
+                rel=path.lstrip('/')
+                target=(ROOT/rel).resolve()
+                if ROOT not in target.parents and target!=ROOT:
+                    return self.respond(404,{'error':'Not found'})
+                data=target.read_bytes()
+            except (FileNotFoundError,OSError):
+                return self.respond(404,{'error':'Not found'})
+            self.send_response(200)
+            self.send_header('Content-Type','application/javascript; charset=utf-8')
+            self.send_header('Content-Length',str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
         else:self.respond(404,{'error':'Not found'})
 
     def do_POST(self):

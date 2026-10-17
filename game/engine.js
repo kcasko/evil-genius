@@ -75,6 +75,14 @@ function resolveMission(state, mission, planIndex, selectedSkill, options = {}) 
   return {state:next,win,story,reward:win?mission.reward:0,infamy:win?9+planIndex*3:2,cost:plan.cost,heat:heatAdded,assigned,match,luck,threshold,events};
 }
 
-const EvilGeniusEngine={AVAILABLE_TOOLS,CANONICAL_HENCHMAN_IDS,CHARACTERS,NPC_STAFF,MISSIONS,acceptDecisionChoice,chooseOfflineSpecialist,createFreshGame,maybeHrIntervention,resolveMission};
+function resolveMissionWithDecision(state, mission, planIndex, aiResult, options = {}) {
+  const plan = mission?.plans?.[planIndex];
+  if (!plan) throw new Error('Unknown mission plan');
+  const fallback = !aiResult || aiResult.fallback === true;
+  const decision = acceptDecisionChoice(fallback ? null : aiResult, plan);
+  return {...resolveMission(state,mission,planIndex,decision.choice,options),decision,deterministic:fallback};
+}
+
+const EvilGeniusEngine={AVAILABLE_TOOLS,CANONICAL_HENCHMAN_IDS,CHARACTERS,NPC_STAFF,MISSIONS,acceptDecisionChoice,chooseOfflineSpecialist,createFreshGame,maybeHrIntervention,resolveMission,resolveMissionWithDecision};
 if(typeof window!=='undefined')window.EvilGeniusEngine=EvilGeniusEngine;
 if(typeof module!=='undefined'&&module.exports)module.exports=EvilGeniusEngine;

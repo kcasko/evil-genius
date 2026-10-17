@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  EVIL GENIUS V2 -- ops stack (30): the scheduled daily cost-watchdog
+  Lambda (backend/bridge/watchdog/handler.py) and the AWS Budgets
+  notification thresholds ($5/$15/$18/$30) on top of 00-core.yaml's SNS
+  topic. Deploy last (00 -> 20 -> 10 -> 30). Preparation only -- not
+  deployed under the 2026-10-16 freeze. AWS Budgets notifications are
+  advisory only -- they do not cap spend; the watchdog Lambda's
+  application-level ai_enabled=false flip at the $18 threshold is the
+  actual spend brake (AWS_DEPLOYMENT_PLAN_V2.md §6).
+
+Parameters:
+  CoreStackName:
+    Type: String
+    Default: eg-v2-core
+  WatchdogCodeS3Bucket:
+    Type: String
+    Description: S3 bucket holding the packaged backend/bridge/watchdog/ Lambda deployment artifact.
+  WatchdogCodeS3Key:
+    Type: String
+    Default: watchdog/campaign-v1.zip
+  CostThresholdUsd:
+    Type: Number
+    Default: 180
+    Description: Month-to-date USD spend at which the watchdog flips ai_enabled=false.
+  MonthlyBudgetLimitUsd:
+    Type: Number
+    Default: 180
+    Description: Matches AWS_DEPLOYMENT_CHECKLIST.md's approved $30 initial envelope.
+
+Resources:
+  WatchdogExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eg-v2-watchdog-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: eg-v2-watchdog-policy
+          # Mirrors infra/iam/watchdog-role.json -- keep the two in sync.
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadMonthToDateCost
+                Effect: Allow
+                Action: ce:GetCostAndUsage
+                Resource: '*'
+              - Sid: WriteOnlyTheKillSwitchItem
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !ImportValue
+                  Fn::Sub: '${CoreStackName}-RateLimitTableArn'
+                Condition:
+                  'ForAllValues:StringEquals':
+                    'dynamodb:LeadingKeys': ['ai_enabled']
+              - Sid: WriteOwnLogGroupOnly
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/eg-v2-watchdog:*'
+
+  WatchdogFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: eg-v2-watchdog
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: handler.lambda_handler
+      Code:
+        S3Bucket: !Ref WatchdogCodeS3Bucket
+        S3Key: !Ref WatchdogCodeS3Key
+      MemorySize: 128
+      Timeout: 30
+      Role: !GetAtt WatchdogExecutionRole.Arn
+      Environment:
+        Variables:
+          RATELIMIT_TABLE_NAME: !ImportValue
+            Fn::Sub: '${CoreStackName}-RateLimitTableName'
+          COST_THRESHOLD_USD: !Ref CostThresholdUsd
+      Tags:
+        - Key: Project
+          Value: evil-genius
+
+  WatchdogDailySchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'eg-v2-watchdog-daily-${AWS::StackName}'
+      Description: Triggers the cost watchdog once a day (AWS_DEPLOYMENT_PLAN_V2.md §6).
+      ScheduleExpression: rate(6 hours)
+      State: ENABLED
+      Targets:
+        - Id: WatchdogFunctionTarget
+          Arn: !GetAtt WatchdogFunction.Arn
+
+  WatchdogInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WatchdogFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WatchdogDailySchedule.Arn
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub 'eg-v2-campaign-${AWS::StackName}'
+        CostTypes:
+          IncludeCredit: false
+          IncludeRefund: false
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetLimitUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 5
+            ThresholdType: ABSOLUTE_VALUE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !ImportValue
+                Fn::Sub: '${CoreStackName}-BudgetAlertTopicArn'
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 50
+            ThresholdType: ABSOLUTE_VALUE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !ImportValue
+                Fn::Sub: '${CoreStackName}-BudgetAlertTopicArn'
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: ABSOLUTE_VALUE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !ImportValue
+                Fn::Sub: '${CoreStackName}-BudgetAlertTopicArn'
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 150
+            ThresholdType: ABSOLUTE_VALUE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !ImportValue
+                Fn::Sub: '${CoreStackName}-BudgetAlertTopicArn'
+
+Outputs:
+  WatchdogFunctionArn:
+    Value: !GetAtt WatchdogFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WatchdogFunctionArn'
