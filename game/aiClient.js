@@ -49,6 +49,13 @@
   }
 
   function decide(requestBody,options){return request('/api/decide',requestBody,95000,options)}
-  function narrate(requestBody,options){return request('/api/narrate',requestBody,15000,options)}
+  async function narrate(requestBody,options){
+    const body=await request('/api/narrate',requestBody,15000,options);
+    if(!body.fallback && typeof body.narration==='string'){
+      const prose=body.narration.replace(/\bCHAOS-9000\b/gi,'CHAOS');
+      if(/[0-9%$]|\bpercent(?:age)?\b/i.test(prose))return fallback('/api/narrate','unsupported_numbers');
+    }
+    return body;
+  }
   return {decide,narrate};
 });

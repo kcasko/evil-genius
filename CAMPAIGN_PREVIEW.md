@@ -36,3 +36,6 @@ The full Rules tab specifies YouTube, Vimeo, Facebook Video, or Youku for the pu
 
 ## Pacing revision
 Contract Breach success now secures its campaign milestone even if Escape fails. Completed failures add +5 retry help, capped at +15; forfeiting adds none. Headquarters shows recovery advice with existing actions. All 99 automated tests passed. First-available simulated choices average 11.38 game days, longest 26 versus the earlier 70. Deliberately poor choices can still take 47 days. No new full browser campaign was played after this pacing revision; browser inspection confirmed the recovery panel and milestone labels.
+
+## Live integration check
+Three new contract Breach fixtures were sent to the existing live API. All three real Decider choices were accepted by the engine, and three Nova Lite narrations returned successfully. First call took 73.078 seconds; later choices took about 21-22 seconds. One narration invented a percentage; the local AI client now suppresses numeric narration, and the narrator receives the actual mission name/objective. All 101 source tests passed. No campaign deployment or full live-browser campaign was performed. Exact incremental test cost is delayed/unverified.
