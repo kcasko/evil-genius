@@ -9,7 +9,7 @@ Contest pattern: **tool selection**. Tags: `#strands-decider-2b` and `#tool-sele
 ## Start here
 
 - Play the live game and open its four-step guide.
-- Read `SUBMISSION_ARTICLE.md` for the architecture, measured behavior, limits, and lessons.
+- Read the [published Builder Center article](https://builder.aws.com/content/3KnbpaYvMSHHRgLJsWOVOW6Dyc2/evil-genius-let-decider-choose-the-henchman) for the architecture, measured behavior, limits, and lessons.
 - Reuse `patterns/specialist-selection/` for a standalone typed-choice -> allowlisted-action recipe.
 - Watch the [88-second live demo](https://d2gk454hfl6odl.cloudfront.net/demo/evil-genius.mp4). The explicitly labeled startup wait is condensed; model responses and gameplay are real.
 

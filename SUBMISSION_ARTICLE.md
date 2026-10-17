@@ -65,3 +65,5 @@ Replace the four fictional specialties with your own authorized actions, offer o
 The useful boundary was not between a game with AI and a game without it. It was the boundary around one decision: let the model choose the specialist, let the engine resolve the consequences, and let the narrator complain about the paperwork afterward.
 
 References: [Decider source and model](https://github.com/strands-labs/strands-decider), [AgentCore reference packaging](https://github.com/Vivek0712/strands-decider-agentcore), and [contest requirements](https://builder.aws.com/build/hackathons/4f50957c-1d08-37ab-b11c-97516b9adeb4/agent-experience-hackathon).
+
+Published article: https://builder.aws.com/content/3KnbpaYvMSHHRgLJsWOVOW6Dyc2/evil-genius-let-decider-choose-the-henchman
